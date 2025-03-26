@@ -156,6 +156,10 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+
+    // Add the include path
+    integration_tests.addIncludePath(b.path("src"));
+
     const integration_test_step = b.step("test-integration", "Run integration tests");
     integration_test_step.dependOn(&integration_tests.step);
     

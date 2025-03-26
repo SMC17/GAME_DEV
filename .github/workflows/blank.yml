@@ -29,17 +29,27 @@ jobs:
       - name: Setup Zig
         uses: goto-bus-stop/setup-zig@v2
         with:
-          version: 0.11.0  # Specify the Zig version we're using
+          version: 0.14.0  # Updated to match our current Zig version
 
       - name: Build All Game Modes
         run: |
           zig build
           echo "Build completed successfully!"
 
-      - name: Run Tests
+      - name: Run Unit Tests
         run: |
           zig build test
-          echo "Tests passed successfully!"
+          echo "Unit tests passed successfully!"
+          
+      - name: Run Integration Tests
+        run: |
+          zig build test-integration
+          echo "Integration tests passed successfully!"
+          
+      - name: Run All Tests
+        run: |
+          zig build test-all
+          echo "All tests passed successfully!"
           
       - name: Verify Executables
         run: |
