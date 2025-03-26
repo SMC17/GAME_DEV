@@ -32,6 +32,33 @@ pub fn build(b: *std.Build) void {
     });
     b.installArtifact(arcade_exe);
     
+    // Tycoon mode executable
+    const tycoon_exe = b.addExecutable(.{
+        .name = "turmoil-tycoon",
+        .root_source_file = b.path("src/modes/tycoon/tycoon_runner.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    b.installArtifact(tycoon_exe);
+    
+    // Character mode executable
+    const character_exe = b.addExecutable(.{
+        .name = "turmoil-character",
+        .root_source_file = b.path("src/modes/character/character_runner.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    b.installArtifact(character_exe);
+    
+    // Sandbox mode executable
+    const sandbox_exe = b.addExecutable(.{
+        .name = "turmoil-sandbox",
+        .root_source_file = b.path("src/modes/sandbox/sandbox_runner.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    b.installArtifact(sandbox_exe);
+    
     // Game launcher
     const launcher_exe = b.addExecutable(.{
         .name = "turmoil-launcher",
@@ -65,6 +92,30 @@ pub fn build(b: *std.Build) void {
     }
     const run_arcade_step = b.step("run-arcade", "Run the arcade mode demo");
     run_arcade_step.dependOn(&run_arcade_cmd.step);
+    
+    const run_tycoon_cmd = b.addRunArtifact(tycoon_exe);
+    run_tycoon_cmd.step.dependOn(b.getInstallStep());
+    if (b.args) |args| {
+        run_tycoon_cmd.addArgs(args);
+    }
+    const run_tycoon_step = b.step("run-tycoon", "Run the tycoon mode");
+    run_tycoon_step.dependOn(&run_tycoon_cmd.step);
+    
+    const run_character_cmd = b.addRunArtifact(character_exe);
+    run_character_cmd.step.dependOn(b.getInstallStep());
+    if (b.args) |args| {
+        run_character_cmd.addArgs(args);
+    }
+    const run_character_step = b.step("run-character", "Run the character-building mode");
+    run_character_step.dependOn(&run_character_cmd.step);
+    
+    const run_sandbox_cmd = b.addRunArtifact(sandbox_exe);
+    run_sandbox_cmd.step.dependOn(b.getInstallStep());
+    if (b.args) |args| {
+        run_sandbox_cmd.addArgs(args);
+    }
+    const run_sandbox_step = b.step("run-sandbox", "Run the sandbox mode");
+    run_sandbox_step.dependOn(&run_sandbox_cmd.step);
     
     const run_launcher_cmd = b.addRunArtifact(launcher_exe);
     run_launcher_cmd.step.dependOn(b.getInstallStep());

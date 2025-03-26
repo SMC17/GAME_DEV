@@ -41,9 +41,9 @@ pub const GameMode = enum {
             .simulation => "zig build run",
             .campaign => "zig build run-campaign",
             .arcade => "zig build run-arcade",
-            .tycoon => "echo \"Tycoon mode not yet implemented\"",
-            .character => "echo \"Character mode not yet implemented\"",
-            .sandbox => "echo \"Sandbox mode not yet implemented\"",
+            .tycoon => "zig build run-tycoon",
+            .character => "zig build run-character",
+            .sandbox => "zig build run-sandbox",
         };
     }
 };
@@ -87,9 +87,9 @@ pub const MainMenu = struct {
             "Core Simulation",
             "Single-Player Campaign",
             "Arcade Mode",
-            "Tycoon/GM Mode (Coming Soon)",
-            "Character-Building Mode (Coming Soon)",
-            "Sandbox Mode (Coming Soon)",
+            "Tycoon/GM Mode",
+            "Character-Building Mode",
+            "Sandbox Mode",
         };
         
         var selected_index: usize = 0;
