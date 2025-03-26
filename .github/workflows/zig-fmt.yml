@@ -1,0 +1,31 @@
+name: Zig Format Check
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  format-check:
+    name: Zig Format Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Zig
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.11.0
+
+      - name: Check Formatting
+        run: |
+          # Run zig fmt on all source files and check for differences
+          # If there are differences, the PR needs formatting adjustments
+          find src -name "*.zig" -type f -exec zig fmt --check {} \;
+          
+          if [ $? -ne 0 ]; then
+            echo "::error::Code formatting issues found. Please run 'zig fmt' on your code."
+            exit 1
+          fi 

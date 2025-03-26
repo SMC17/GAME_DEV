@@ -1,0 +1,16 @@
+name: Greetings
+
+on: [pull_request_target, issues]
+
+jobs:
+  greeting:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+    - uses: actions/first-interaction@v1
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+        issue-message: "Welcome to the TURMOIL project! Thank you for your first issue. Our team will review it as soon as possible. Please make sure to check out our contribution guidelines in the README."
+        pr-message: "Thank you for your first pull request to TURMOIL! We appreciate your contribution to our oil industry simulation game. Our team will review your changes shortly. Don't forget to run 'zig fmt' on your code before submitting PRs!"

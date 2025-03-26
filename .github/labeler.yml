@@ -1,0 +1,47 @@
+# Engine changes
+engine:
+- src/engine/**/*
+
+# Core simulation
+simulation:
+- src/main.zig
+- src/engine/**/*
+
+# UI changes
+ui:
+- src/ui/**/*
+
+# Campaign mode
+campaign:
+- src/modes/campaign/**/*
+
+# Arcade mode
+arcade:
+- src/modes/arcade/**/*
+
+# Tycoon mode
+tycoon:
+- src/modes/tycoon/**/*
+
+# Character mode
+character:
+- src/modes/character/**/*
+
+# Sandbox mode
+sandbox:
+- src/modes/sandbox/**/*
+
+# Documentation changes
+documentation:
+- README.md
+- docs/**/*
+- CHANGELOG.md
+
+# Build system changes
+build:
+- build.zig
+- .github/workflows/**/*
+
+# Tests
+tests:
+- tests/**/* 
