@@ -1,0 +1,69 @@
+name: Cross-Platform Tests
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            output-dir: zig-out/bin
+          - os: windows-latest
+            output-dir: zig-out/bin
+          - os: macos-latest
+            output-dir: zig-out/bin
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Zig
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.11.0
+
+      - name: Build
+        run: zig build
+
+      - name: Run Unit Tests
+        run: zig build test
+
+      - name: Run Integration Tests
+        run: zig build test-integration
+        continue-on-error: true  # Allow integration tests to fail on some platforms during development
+
+      - name: Verify Executables
+        run: |
+          ls -la ${{ matrix.output-dir }}
+        shell: bash
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: turmoil-${{ matrix.os }}
+          path: ${{ matrix.output-dir }}
+          
+  summary:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs: build
+    if: always()
+    
+    steps:
+      - name: Check Build Status
+        run: |
+          if [ "${{ needs.build.result }}" == "success" ]; then
+            echo "✅ All builds passed!"
+          else
+            echo "❌ Some builds failed. Check the individual jobs for details."
+            echo "This doesn't necessarily mean the PR should be rejected - some platforms might have known issues."
+          fi 

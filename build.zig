@@ -68,6 +68,22 @@ pub fn build(b: *std.Build) void {
     });
     b.installArtifact(launcher_exe);
 
+    // Documentation generator
+    const docs_generator = b.addExecutable(.{
+        .name = "docgen",
+        .root_source_file = b.path("tools/generate_docs.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    
+    // Documentation generation step
+    const docs_output_dir = "docs/api";
+    const docs_cmd = b.addRunArtifact(docs_generator);
+    docs_cmd.addArgs(&[_][]const u8{ "src", docs_output_dir });
+    
+    const docs_step = b.step("docs", "Generate API documentation");
+    docs_step.dependOn(&docs_cmd.step);
+
     // Run steps
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
@@ -125,7 +141,7 @@ pub fn build(b: *std.Build) void {
     const run_launcher_step = b.step("run-launcher", "Run the game launcher");
     run_launcher_step.dependOn(&run_launcher_cmd.step);
 
-    // Tests
+    // Unit Tests
     const main_tests = b.addTest(.{
         .root_source_file = b.path("src/main.zig"),
         .target = target,
@@ -133,4 +149,36 @@ pub fn build(b: *std.Build) void {
     });
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&main_tests.step);
+    
+    // Integration Tests
+    const integration_tests = b.addTest(.{
+        .root_source_file = b.path("tests/integration_tests.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const integration_test_step = b.step("test-integration", "Run integration tests");
+    integration_test_step.dependOn(&integration_tests.step);
+    
+    // Run all tests (both unit and integration)
+    const all_tests_step = b.step("test-all", "Run all tests (unit and integration)");
+    all_tests_step.dependOn(&main_tests.step);
+    all_tests_step.dependOn(&integration_tests.step);
+
+    // Benchmark executable
+    const benchmark_exe = b.addExecutable(.{
+        .name = "turmoil-benchmark",
+        .root_source_file = b.path("tests/benchmarks.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    b.installArtifact(benchmark_exe);
+
+    // Benchmark run step
+    const benchmark_cmd = b.addRunArtifact(benchmark_exe);
+    benchmark_cmd.step.dependOn(b.getInstallStep());
+    if (b.args) |args| {
+        benchmark_cmd.addArgs(args);
+    }
+    const benchmark_step = b.step("benchmark", "Run performance benchmarks");
+    benchmark_step.dependOn(&benchmark_cmd.step);
 } 

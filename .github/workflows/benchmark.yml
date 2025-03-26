@@ -1,0 +1,47 @@
+name: Performance Benchmarks
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  # Run on a schedule to track performance over time
+  schedule:
+    - cron: '0 0 * * 0'  # Every Sunday at midnight
+  workflow_dispatch:
+
+jobs:
+  benchmark:
+    name: Run Benchmarks
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Setup Zig
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.11.0
+          
+      - name: Run Benchmarks
+        run: zig build benchmark
+        
+      - name: Upload Benchmark Results
+        uses: actions/upload-artifact@v3
+        with:
+          name: benchmark-results
+          path: benchmarks/
+          
+      - name: Compare with Previous Benchmarks
+        if: github.event_name == 'pull_request'
+        run: |
+          echo "Comparing benchmark results with main branch..."
+          # In a real implementation, we would:
+          # 1. Download previous benchmark results from main branch
+          # 2. Compare them with current results
+          # 3. Fail if performance has degraded beyond a threshold
+          
+          # For now just display the results
+          echo "Current benchmark results:"
+          cat benchmarks/*.json 
