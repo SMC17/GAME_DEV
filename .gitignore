@@ -1,0 +1,24 @@
+# Zig build artifacts
+zig-cache/
+zig-out/
+/zig-*
+
+# Executables
+/turmoil
+/turmoil-campaign
+/turmoil-arcade
+/turmoil-launcher
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# Editor specific files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Build directories
+/build/
+/bin/ 
