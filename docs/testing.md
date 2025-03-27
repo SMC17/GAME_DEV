@@ -64,6 +64,29 @@ The benchmark file is `tests/benchmarks.zig`, which measures:
 - Arcade mode extraction and scoring
 - Sandbox mode simulation
 
+## Memory Management Testing
+
+TURMOIL uses Zig's allocator pattern to manage memory. To ensure there are no memory leaks:
+
+1. Always pair allocations with corresponding deallocations
+2. Use defer statements to ensure cleanup even in error cases
+3. Pass allocators down through function calls rather than using global allocators
+4. Prefer stack allocations when possible
+5. Be mindful of string duplication with allocPrint
+
+We've implemented several best practices:
+- The TerminalUI now consistently uses the provided allocator
+- All UI components properly manage their allocations
+- Temporary string buffers use the caller's allocator
+
+## Character Encoding Best Practices
+
+To ensure compatibility across platforms:
+1. Use ASCII characters whenever possible for UI elements
+2. Avoid Unicode box-drawing characters and special symbols
+3. For internationalization, ensure proper UTF-8 handling
+4. Test on different terminal implementations
+
 ## Running All Tests
 
 You can run all tests (unit, integration, and UI) with a single command:

@@ -5,6 +5,51 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    // Create modules for shared components
+    const terminal_ui_module = b.createModule(.{
+        .root_source_file = b.path("src/ui/terminal_ui.zig"),
+    });
+    
+    const simulation_module = b.createModule(.{
+        .root_source_file = b.path("src/engine/simulation.zig"),
+    });
+    
+    const oil_field_module = b.createModule(.{
+        .root_source_file = b.path("src/engine/oil_field.zig"),
+    });
+    
+    // Add dependencies between modules
+    simulation_module.addImport("oil_field", oil_field_module);
+    
+    const player_data_module = b.createModule(.{
+        .root_source_file = b.path("src/shared/player_data.zig"),
+    });
+    
+    // Game mode modules
+    const tycoon_mode_module = b.createModule(.{
+        .root_source_file = b.path("src/modes/tycoon/tycoon_mode.zig"),
+    });
+    tycoon_mode_module.addImport("oil_field", oil_field_module);
+    tycoon_mode_module.addImport("simulation", simulation_module);
+    tycoon_mode_module.addImport("terminal_ui", terminal_ui_module);
+    tycoon_mode_module.addImport("player_data", player_data_module);
+    
+    const arcade_mode_module = b.createModule(.{
+        .root_source_file = b.path("src/modes/arcade/arcade_mode.zig"),
+    });
+    arcade_mode_module.addImport("oil_field", oil_field_module);
+    arcade_mode_module.addImport("simulation", simulation_module);
+    arcade_mode_module.addImport("terminal_ui", terminal_ui_module);
+    arcade_mode_module.addImport("player_data", player_data_module);
+    
+    const sandbox_mode_module = b.createModule(.{
+        .root_source_file = b.path("src/modes/sandbox/sandbox_mode.zig"),
+    });
+    sandbox_mode_module.addImport("oil_field", oil_field_module);
+    sandbox_mode_module.addImport("simulation", simulation_module);
+    sandbox_mode_module.addImport("terminal_ui", terminal_ui_module);
+    sandbox_mode_module.addImport("player_data", player_data_module);
+
     // Main executable (simulation demo)
     const exe = b.addExecutable(.{
         .name = "turmoil",
@@ -12,6 +57,14 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    // Add modules to the main executable
+    exe.root_module.addImport("terminal_ui", terminal_ui_module);
+    exe.root_module.addImport("oil_field", oil_field_module);
+    exe.root_module.addImport("simulation", simulation_module);
+    exe.root_module.addImport("player_data", player_data_module);
+    exe.root_module.addImport("tycoon_mode", tycoon_mode_module);
+    exe.root_module.addImport("arcade_mode", arcade_mode_module);
+    exe.root_module.addImport("sandbox_mode", sandbox_mode_module);
     b.installArtifact(exe);
 
     // Campaign mode executable
@@ -21,6 +74,13 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    campaign_exe.root_module.addImport("terminal_ui", terminal_ui_module);
+    campaign_exe.root_module.addImport("oil_field", oil_field_module);
+    campaign_exe.root_module.addImport("simulation", simulation_module);
+    campaign_exe.root_module.addImport("player_data", player_data_module);
+    campaign_exe.root_module.addImport("tycoon_mode", tycoon_mode_module);
+    campaign_exe.root_module.addImport("arcade_mode", arcade_mode_module);
+    campaign_exe.root_module.addImport("sandbox_mode", sandbox_mode_module);
     b.installArtifact(campaign_exe);
     
     // Arcade mode executable
@@ -30,6 +90,13 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    arcade_exe.root_module.addImport("terminal_ui", terminal_ui_module);
+    arcade_exe.root_module.addImport("oil_field", oil_field_module);
+    arcade_exe.root_module.addImport("simulation", simulation_module);
+    arcade_exe.root_module.addImport("player_data", player_data_module);
+    arcade_exe.root_module.addImport("tycoon_mode", tycoon_mode_module);
+    arcade_exe.root_module.addImport("arcade_mode", arcade_mode_module);
+    arcade_exe.root_module.addImport("sandbox_mode", sandbox_mode_module);
     b.installArtifact(arcade_exe);
     
     // Tycoon mode executable
@@ -39,6 +106,13 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    tycoon_exe.root_module.addImport("terminal_ui", terminal_ui_module);
+    tycoon_exe.root_module.addImport("oil_field", oil_field_module);
+    tycoon_exe.root_module.addImport("simulation", simulation_module);
+    tycoon_exe.root_module.addImport("player_data", player_data_module);
+    tycoon_exe.root_module.addImport("tycoon_mode", tycoon_mode_module);
+    tycoon_exe.root_module.addImport("arcade_mode", arcade_mode_module);
+    tycoon_exe.root_module.addImport("sandbox_mode", sandbox_mode_module);
     b.installArtifact(tycoon_exe);
     
     // Character mode executable
@@ -48,6 +122,13 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    character_exe.root_module.addImport("terminal_ui", terminal_ui_module);
+    character_exe.root_module.addImport("oil_field", oil_field_module);
+    character_exe.root_module.addImport("simulation", simulation_module);
+    character_exe.root_module.addImport("player_data", player_data_module);
+    character_exe.root_module.addImport("tycoon_mode", tycoon_mode_module);
+    character_exe.root_module.addImport("arcade_mode", arcade_mode_module);
+    character_exe.root_module.addImport("sandbox_mode", sandbox_mode_module);
     b.installArtifact(character_exe);
     
     // Sandbox mode executable
@@ -57,6 +138,13 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    sandbox_exe.root_module.addImport("terminal_ui", terminal_ui_module);
+    sandbox_exe.root_module.addImport("oil_field", oil_field_module);
+    sandbox_exe.root_module.addImport("simulation", simulation_module);
+    sandbox_exe.root_module.addImport("player_data", player_data_module);
+    sandbox_exe.root_module.addImport("tycoon_mode", tycoon_mode_module);
+    sandbox_exe.root_module.addImport("arcade_mode", arcade_mode_module);
+    sandbox_exe.root_module.addImport("sandbox_mode", sandbox_mode_module);
     b.installArtifact(sandbox_exe);
     
     // Game launcher
@@ -66,6 +154,13 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    launcher_exe.root_module.addImport("terminal_ui", terminal_ui_module);
+    launcher_exe.root_module.addImport("oil_field", oil_field_module);
+    launcher_exe.root_module.addImport("simulation", simulation_module);
+    launcher_exe.root_module.addImport("player_data", player_data_module);
+    launcher_exe.root_module.addImport("tycoon_mode", tycoon_mode_module);
+    launcher_exe.root_module.addImport("arcade_mode", arcade_mode_module);
+    launcher_exe.root_module.addImport("sandbox_mode", sandbox_mode_module);
     b.installArtifact(launcher_exe);
 
     // Documentation generator
@@ -147,6 +242,13 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    main_tests.root_module.addImport("terminal_ui", terminal_ui_module);
+    main_tests.root_module.addImport("oil_field", oil_field_module);
+    main_tests.root_module.addImport("simulation", simulation_module);
+    main_tests.root_module.addImport("player_data", player_data_module);
+    main_tests.root_module.addImport("tycoon_mode", tycoon_mode_module);
+    main_tests.root_module.addImport("arcade_mode", arcade_mode_module);
+    main_tests.root_module.addImport("sandbox_mode", sandbox_mode_module);
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&main_tests.step);
     
@@ -159,6 +261,13 @@ pub fn build(b: *std.Build) void {
 
     // Add the include path
     integration_tests.addIncludePath(b.path("src"));
+    integration_tests.root_module.addImport("terminal_ui", terminal_ui_module);
+    integration_tests.root_module.addImport("oil_field", oil_field_module);
+    integration_tests.root_module.addImport("simulation", simulation_module);
+    integration_tests.root_module.addImport("player_data", player_data_module);
+    integration_tests.root_module.addImport("tycoon_mode", tycoon_mode_module);
+    integration_tests.root_module.addImport("arcade_mode", arcade_mode_module);
+    integration_tests.root_module.addImport("sandbox_mode", sandbox_mode_module);
 
     const integration_test_step = b.step("test-integration", "Run integration tests");
     integration_test_step.dependOn(&integration_tests.step);
@@ -169,6 +278,13 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    ui_tests.root_module.addImport("terminal_ui", terminal_ui_module);
+    ui_tests.root_module.addImport("oil_field", oil_field_module);
+    ui_tests.root_module.addImport("simulation", simulation_module);
+    ui_tests.root_module.addImport("player_data", player_data_module);
+    ui_tests.root_module.addImport("tycoon_mode", tycoon_mode_module);
+    ui_tests.root_module.addImport("arcade_mode", arcade_mode_module);
+    ui_tests.root_module.addImport("sandbox_mode", sandbox_mode_module);
 
     const ui_test_step = b.step("test-ui", "Run UI component tests");
     ui_test_step.dependOn(&ui_tests.step);
@@ -186,6 +302,13 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    benchmark_exe.root_module.addImport("terminal_ui", terminal_ui_module);
+    benchmark_exe.root_module.addImport("oil_field", oil_field_module);
+    benchmark_exe.root_module.addImport("simulation", simulation_module);
+    benchmark_exe.root_module.addImport("player_data", player_data_module);
+    benchmark_exe.root_module.addImport("tycoon_mode", tycoon_mode_module);
+    benchmark_exe.root_module.addImport("arcade_mode", arcade_mode_module);
+    benchmark_exe.root_module.addImport("sandbox_mode", sandbox_mode_module);
     b.installArtifact(benchmark_exe);
 
     // Benchmark run step

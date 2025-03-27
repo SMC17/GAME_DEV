@@ -1,6 +1,6 @@
 const std = @import("std");
 const sandbox_mode = @import("sandbox_mode.zig");
-const terminal_ui = @import("../../ui/terminal_ui.zig");
+const terminal_ui = @import("terminal_ui");
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -8,7 +8,7 @@ pub fn main() !void {
     const allocator = gpa.allocator();
     
     // Initialize the UI
-    var ui = terminal_ui.TerminalUI.init();
+    var ui = terminal_ui.TerminalUI.init(allocator);
     
     try ui.clear();
     try ui.drawTitle("TURMOIL: Sandbox Mode");
@@ -84,15 +84,15 @@ pub fn main() !void {
         
         // Production effect status bar
         const prod_color: terminal_ui.TextColor = if (production_effect < 0.8) .red else if (production_effect < 1.0) .yellow else .bright_green;
-        try ui.drawStatusBar("Production", try std.fmt.allocPrint(allocator, "{d:.1}%", .{production_effect * 100.0}), 20, '■', '□', production_effect, prod_color);
+        try ui.drawStatusBar("Production", try std.fmt.allocPrint(allocator, "{d:.1}%", .{production_effect * 100.0}), 20, '#', '.', production_effect, prod_color);
         
         // Cost effect status bar
         const cost_color: terminal_ui.TextColor = if (cost_effect > 1.3) .red else if (cost_effect > 1.0) .yellow else .bright_green;
-        try ui.drawStatusBar("Costs", try std.fmt.allocPrint(allocator, "{d:.1}%", .{cost_effect * 100.0}), 20, '■', '□', cost_effect, cost_color);
+        try ui.drawStatusBar("Costs", try std.fmt.allocPrint(allocator, "{d:.1}%", .{cost_effect * 100.0}), 20, '#', '.', cost_effect, cost_color);
         
         // Risk effect status bar
         const risk_color: terminal_ui.TextColor = if (risk_effect > 1.5) .red else if (risk_effect > 1.0) .yellow else .bright_green;
-        try ui.drawStatusBar("Incident Risk", try std.fmt.allocPrint(allocator, "{d:.1}%", .{risk_effect * 100.0}), 20, '■', '□', risk_effect, risk_color);
+        try ui.drawStatusBar("Incident Risk", try std.fmt.allocPrint(allocator, "{d:.1}%", .{risk_effect * 100.0}), 20, '#', '.', risk_effect, risk_color);
         
         // Forecast preview
         try ui.print("Forecast: ", .white, .normal);
@@ -152,7 +152,7 @@ pub fn main() !void {
         if (sandbox.disaster_history.items.len > 0) {
             try ui.println("Recent Disasters:", .bright_red, .bold);
             const disaster_count = sandbox.disaster_history.items.len;
-            const display_count = std.math.min(disaster_count, 3);
+            const display_count = @min(disaster_count, 3);
             const start_index = disaster_count - display_count;
             
             for (sandbox.disaster_history.items[start_index..]) |disaster| {
@@ -220,13 +220,13 @@ pub fn main() !void {
                             try addOilFieldMenu(&ui, allocator, &sandbox);
                         },
                         2 => { // Change Market Scenario
-                            try changeMarketScenarioMenu(&ui, &sandbox);
+                            try changeMarketScenarioMenu(&ui, allocator, &sandbox);
                         },
                         3 => { // Adjust Environmental Factors
                             try adjustEnvironmentalFactorsMenu(&ui, allocator, &sandbox);
                         },
                         4 => { // Change Region Type
-                            try changeRegionTypeMenu(&ui, &sandbox);
+                            try changeRegionTypeMenu(&ui, allocator, &sandbox);
                         },
                         5 => { // View Weather Forecast
                             try viewWeatherForecastMenu(&ui, allocator, &sandbox);
@@ -334,26 +334,34 @@ fn addOilFieldMenu(ui: *terminal_ui.TerminalUI, allocator: std.mem.Allocator, sa
 }
 
 /// Menu for changing market scenario
-fn changeMarketScenarioMenu(ui: *terminal_ui.TerminalUI, sandbox: *sandbox_mode.SandboxMode) !void {
+fn changeMarketScenarioMenu(ui: *terminal_ui.TerminalUI, allocator: std.mem.Allocator, sandbox: *sandbox_mode.SandboxMode) !void {
     try ui.clear();
     try ui.drawTitle("Change Market Scenario");
     
+    // Define individual scenarios
+    const scenario_stable = sandbox_mode.MarketScenario.stable;
+    const scenario_boom = sandbox_mode.MarketScenario.boom;
+    const scenario_bust = sandbox_mode.MarketScenario.bust;
+    const scenario_fluctuating = sandbox_mode.MarketScenario.fluctuating;
+    const scenario_shortage = sandbox_mode.MarketScenario.shortage;
+    const scenario_oversupply = sandbox_mode.MarketScenario.oversupply;
+    
     const scenarios = [_]sandbox_mode.MarketScenario{
-        .stable,
-        .boom,
-        .bust,
-        .volatile,
-        .shortage,
-        .oversupply,
+        scenario_stable,
+        scenario_boom,
+        scenario_bust,
+        scenario_fluctuating,
+        scenario_shortage,
+        scenario_oversupply,
     };
     
     try ui.println("Select a market scenario:", .bright_cyan, .bold);
     
     for (scenarios, 0..) |scenario, i| {
-        try ui.print(try std.fmt.bufPrint(&[_]u8{0} ** 10, "{d}. ", .{i + 1}), .bright_white, .bold);
-        try ui.println(try std.fmt.bufPrint(&[_]u8{0} ** 100, "{s}", .{@tagName(scenario)}), .bright_green, .bold);
-        try ui.println(try std.fmt.bufPrint(&[_]u8{0} ** 200, "   {s}", .{scenario.getDescription()}), .white, .normal);
-        try ui.println(try std.fmt.bufPrint(&[_]u8{0} ** 200, "   Base Price: ${d:.2}, Volatility: {d:.1}%", 
+        try ui.print(try std.fmt.allocPrint(allocator, "{d}. ", .{i + 1}), .bright_white, .bold);
+        try ui.println(try std.fmt.allocPrint(allocator, "{s}", .{@tagName(scenario)}), .bright_green, .bold);
+        try ui.println(try std.fmt.allocPrint(allocator, "   {s}", .{scenario.getDescription()}), .white, .normal);
+        try ui.println(try std.fmt.allocPrint(allocator, "   Base Price: ${d:.2}, Volatility: {d:.1}%", 
             .{scenario.getBasePrice(), scenario.getVolatility() * 100.0}), .yellow, .italic);
         try ui.stdout.print("\n", .{});
     }
@@ -366,7 +374,7 @@ fn changeMarketScenarioMenu(ui: *terminal_ui.TerminalUI, sandbox: *sandbox_mode.
         if (choice > 0 and choice <= scenarios.len) {
             sandbox.setMarketScenario(scenarios[choice - 1]);
             
-            try ui.println(try std.fmt.bufPrint(&[_]u8{0} ** 200, "Market scenario changed to {s}.", 
+            try ui.println(try std.fmt.allocPrint(allocator, "Market scenario changed to {s}.", 
                 .{@tagName(scenarios[choice - 1])}), .bright_green, .bold);
         }
     }
@@ -423,7 +431,7 @@ fn adjustEnvironmentalFactorsMenu(ui: *terminal_ui.TerminalUI, allocator: std.me
 }
 
 /// Menu for changing region type
-fn changeRegionTypeMenu(ui: *terminal_ui.TerminalUI, sandbox: *sandbox_mode.SandboxMode) !void {
+fn changeRegionTypeMenu(ui: *terminal_ui.TerminalUI, allocator: std.mem.Allocator, sandbox: *sandbox_mode.SandboxMode) !void {
     try ui.clear();
     try ui.drawTitle("Change Region Type");
     
@@ -438,15 +446,15 @@ fn changeRegionTypeMenu(ui: *terminal_ui.TerminalUI, sandbox: *sandbox_mode.Sand
     try ui.println("Select a region type:", .bright_cyan, .bold);
     
     for (regions, 0..) |region, i| {
-        try ui.print(try std.fmt.bufPrint(&[_]u8{0} ** 10, "{d}. ", .{i + 1}), .bright_white, .bold);
-        try ui.println(try std.fmt.bufPrint(&[_]u8{0} ** 100, "{s}", .{@tagName(region)}), .bright_blue, .bold);
-        try ui.println(try std.fmt.bufPrint(&[_]u8{0} ** 200, "   {s}", .{region.getDescription()}), .white, .normal);
+        try ui.print(try std.fmt.allocPrint(allocator, "{d}. ", .{i + 1}), .bright_white, .bold);
+        try ui.println(try std.fmt.allocPrint(allocator, "{s}", .{@tagName(region)}), .bright_blue, .bold);
+        try ui.println(try std.fmt.allocPrint(allocator, "   {s}", .{region.getDescription()}), .white, .normal);
         
         // Show typical weather patterns
-        var weather_patterns = [_][]const u8{"clear", "cloudy", "rainy", "stormy", "blizzard", "heatwave"};
-        var probs = region.getWeatherProbabilities();
+        const weather_patterns = [_][]const u8{"clear", "cloudy", "rainy", "stormy", "blizzard", "heatwave"};
+        const probs = region.getWeatherProbabilities();
         
-        try ui.print(try std.fmt.bufPrint(&[_]u8{0} ** 200, "   Weather Patterns: "), .cyan, .italic);
+        try ui.print(try std.fmt.allocPrint(allocator, "   Weather Patterns: ", .{}), .cyan, .italic);
         for (weather_patterns, 0..) |pattern, w_idx| {
             if (probs[w_idx] > 0.0) {
                 const weather_color: terminal_ui.TextColor = switch (w_idx) {
@@ -459,8 +467,8 @@ fn changeRegionTypeMenu(ui: *terminal_ui.TerminalUI, sandbox: *sandbox_mode.Sand
                     else => .white,
                 };
                 
-                try ui.print(try std.fmt.bufPrint(&[_]u8{0} ** 50, "{s}", .{pattern}), weather_color, .normal);
-                try ui.print(try std.fmt.bufPrint(&[_]u8{0} ** 20, " ({d:.0}%) ", .{probs[w_idx] * 100.0}), .cyan, .normal);
+                try ui.print(try std.fmt.allocPrint(allocator, "{s}", .{pattern}), weather_color, .normal);
+                try ui.print(try std.fmt.allocPrint(allocator, " ({d:.0}%) ", .{probs[w_idx] * 100.0}), .cyan, .normal);
             }
         }
         try ui.stdout.print("\n\n", .{});
@@ -474,7 +482,7 @@ fn changeRegionTypeMenu(ui: *terminal_ui.TerminalUI, sandbox: *sandbox_mode.Sand
         if (choice > 0 and choice <= regions.len) {
             sandbox.setRegion(regions[choice - 1]);
             
-            try ui.println(try std.fmt.bufPrint(&[_]u8{0} ** 200, "\nRegion changed to {s}.", 
+            try ui.println(try std.fmt.allocPrint(allocator, "\nRegion changed to {s}.", 
                 .{@tagName(regions[choice - 1])}), .bright_green, .bold);
             try ui.println("Weather patterns have been updated for the new region.", .bright_green, .normal);
         }
@@ -494,14 +502,14 @@ fn viewWeatherForecastMenu(ui: *terminal_ui.TerminalUI, allocator: std.mem.Alloc
     defer allocator.free(weather_report);
     
     // Split the report into lines and display with proper formatting
-    var lines = std.mem.split(u8, weather_report, "\n");
+    var lines = std.mem.splitScalar(u8, weather_report, '\n');
     while (lines.next()) |line| {
         if (std.mem.startsWith(u8, line, "WEATHER REPORT")) {
             // Header
             try ui.println(line, .bright_cyan, .bold);
         } else if (std.mem.startsWith(u8, line, "Current conditions:")) {
             // Current weather
-            var parts = std.mem.split(u8, line, ":");
+            var parts = std.mem.splitScalar(u8, line, ':');
             try ui.print(try std.fmt.allocPrint(allocator, "{s}:", .{parts.next().?}), .bright_white, .bold);
             
             if (parts.next()) |condition| {
@@ -518,7 +526,7 @@ fn viewWeatherForecastMenu(ui: *terminal_ui.TerminalUI, allocator: std.mem.Alloc
             }
         } else if (std.mem.startsWith(u8, line, "  Day")) {
             // Forecast day
-            var parts = std.mem.split(u8, line, ":");
+            var parts = std.mem.splitScalar(u8, line, ':');
             try ui.print(try std.fmt.allocPrint(allocator, "{s}:", .{parts.next().?}), .white, .normal);
             
             if (parts.next()) |condition| {
@@ -534,7 +542,7 @@ fn viewWeatherForecastMenu(ui: *terminal_ui.TerminalUI, allocator: std.mem.Alloc
                 try ui.println(try std.fmt.allocPrint(allocator, "{s}", .{condition}), weather_color, .normal);
             }
         } else if (std.mem.startsWith(u8, line, "  Production:")) {
-            var parts = std.mem.split(u8, line, ":");
+            var parts = std.mem.splitScalar(u8, line, ':');
             try ui.print(try std.fmt.allocPrint(allocator, "{s}:", .{parts.next().?}), .white, .normal);
             
             if (parts.next()) |value| {
@@ -543,7 +551,7 @@ fn viewWeatherForecastMenu(ui: *terminal_ui.TerminalUI, allocator: std.mem.Alloc
                 try ui.println(try std.fmt.allocPrint(allocator, "{s}", .{value}), color, .normal);
             }
         } else if (std.mem.startsWith(u8, line, "  Operational costs:")) {
-            var parts = std.mem.split(u8, line, ":");
+            var parts = std.mem.splitScalar(u8, line, ':');
             try ui.print(try std.fmt.allocPrint(allocator, "{s}:", .{parts.next().?}), .white, .normal);
             
             if (parts.next()) |value| {
@@ -552,7 +560,7 @@ fn viewWeatherForecastMenu(ui: *terminal_ui.TerminalUI, allocator: std.mem.Alloc
                 try ui.println(try std.fmt.allocPrint(allocator, "{s}", .{value}), color, .normal);
             }
         } else if (std.mem.startsWith(u8, line, "  Incident risk:")) {
-            var parts = std.mem.split(u8, line, ":");
+            var parts = std.mem.splitScalar(u8, line, ':');
             try ui.print(try std.fmt.allocPrint(allocator, "{s}:", .{parts.next().?}), .white, .normal);
             
             if (parts.next()) |value| {
@@ -631,7 +639,7 @@ fn generateReportMenu(ui: *terminal_ui.TerminalUI, allocator: std.mem.Allocator,
     defer allocator.free(report);
     
     // Split the report into lines and apply colors
-    var lines = std.mem.split(u8, report, "\n");
+    var lines = std.mem.splitScalar(u8, report, '\n');
     while (lines.next()) |line| {
         if (std.mem.indexOf(u8, line, "===") != null) {
             // Headers

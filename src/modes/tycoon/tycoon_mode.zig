@@ -1,5 +1,5 @@
 const std = @import("std");
-const oil_field = @import("oil_field.zig");
+const oil_field = @import("oil_field");
 
 /// Market condition that affects oil prices and business operations
 pub const MarketCondition = enum {
@@ -264,7 +264,7 @@ pub const TycoonMode = struct {
             return false;
         }
         
-        var project = &self.research_projects.items[project_index];
+        const project = &self.research_projects.items[project_index];
         
         if (project.completed or project.days_researched > 0) {
             return false; // Already completed or in progress
@@ -282,7 +282,7 @@ pub const TycoonMode = struct {
     }
     
     /// Calculate daily profit
-    fn calculateDailyProfit(self: *TycoonMode) f32 {
+    pub fn calculateDailyProfit(self: *TycoonMode) f32 {
         var total_extracted: f32 = 0.0;
         
         // Calculate extraction from all fields
@@ -295,7 +295,6 @@ pub const TycoonMode = struct {
         }
         
         // Calculate revenue
-        const production_level = self.department_levels[@intFromEnum(Department.production)];
         const market_level = self.department_levels[@intFromEnum(Department.marketing)];
         
         const price_multiplier = self.market_condition.getPriceMultiplier() * 
@@ -350,7 +349,7 @@ pub const TycoonMode = struct {
     }
     
     /// Generate a new random oil field to purchase
-    fn generateNewOilField(self: *TycoonMode) !void {
+    pub fn generateNewOilField(self: *TycoonMode) !void {
         const research_level = self.department_levels[@intFromEnum(Department.research)];
         const quality_bonus = 0.05 * @as(f32, @floatFromInt(research_level - 1));
         

@@ -189,9 +189,9 @@ pub const Character = struct {
     
     /// Initialize a new character
     pub fn init(allocator: std.mem.Allocator, name: []const u8, background: CharacterBackground) !Character {
-        var traits = std.ArrayList(CharacterTrait).init(allocator);
-        var active_quests = std.ArrayList(CharacterQuest).init(allocator);
-        var completed_quests = std.ArrayList(CharacterQuest).init(allocator);
+        const traits = std.ArrayList(CharacterTrait).init(allocator);
+        const active_quests = std.ArrayList(CharacterQuest).init(allocator);
+        const completed_quests = std.ArrayList(CharacterQuest).init(allocator);
         
         // Initialize skills based on background
         const starting_skill_levels = background.getStartingSkills();
@@ -385,8 +385,8 @@ pub const CharacterMode = struct {
     
     /// Initialize a new character mode
     pub fn init(allocator: std.mem.Allocator, character_name: []const u8, background: CharacterBackground) !CharacterMode {
-        var character = try Character.init(allocator, character_name, background);
-        var quest_manager = QuestManager.init(allocator);
+        const character = try Character.init(allocator, character_name, background);
+        const quest_manager = QuestManager.init(allocator);
         
         return CharacterMode{
             .character = character,
@@ -417,7 +417,7 @@ pub const CharacterMode = struct {
         
         // Random skill experience (from daily activities)
         const skill_index = @mod(self.current_day, 6);
-        const skill_type = @enumFromInt(skill_index);
+        const skill_type = @as(SkillType, @enumFromInt(skill_index));
         _ = self.character.addSkillExperience(skill_type, 10);
         
         // Daily income based on business skill

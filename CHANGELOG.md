@@ -10,6 +10,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Multi-platform build support in CI/CD
 - Additional unit tests for core simulation logic
+- Memory leak detection in development workflow
+- Git hooks for automating code quality checks
+- Contributing guidelines with memory management best practices
+- Pull request template with memory management checklist
+- Comprehensive documentation on memory fixes and best practices
+
+### Fixed
+- Memory leaks with proper allocator management in Terminal UI
+- Improved error handling for player data operations
+- Replaced Unicode box-drawing characters with ASCII alternatives for better compatibility
+- Updated the TerminalUI initialization to consistently use the provided allocator
+- Memory leaks in SandboxMode oil field deinitialization
+- Missing argument parameters in allocPrint calls
+- Added missing cleanup_cost_multiplier field in sandbox_mode
 
 ## [0.2.0] - 2023-06-15
 

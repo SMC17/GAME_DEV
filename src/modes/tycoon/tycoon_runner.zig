@@ -1,7 +1,7 @@
 const std = @import("std");
 const tycoon_mode = @import("tycoon_mode.zig");
-const oil_field = @import("oil_field.zig");
-const terminal_ui = @import("../../ui/terminal_ui.zig");
+const oil_field = @import("oil_field");
+const terminal_ui = @import("terminal_ui");
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -9,7 +9,7 @@ pub fn main() !void {
     const allocator = gpa.allocator();
     
     // Initialize the UI
-    var ui = terminal_ui.TerminalUI.init();
+    var ui = terminal_ui.TerminalUI.init(allocator);
     
     try ui.clear();
     try ui.drawTitle("TURMOIL: Tycoon Mode");
@@ -200,9 +200,9 @@ pub fn main() !void {
                             try ui.clear();
                             try ui.drawTitle("Upgrade Department");
                             
-                            const departments = [_]tycoon_mode.Department{ .research, .production, .marketing, .hr, .logistics };
+                            const dept_list = [_]tycoon_mode.Department{ .research, .production, .marketing, .hr, .logistics };
                             
-                            for (departments, 0..) |dept, i| {
+                            for (dept_list, 0..) |dept, i| {
                                 const dept_index = @intFromEnum(dept);
                                 const level = game.department_levels[dept_index];
                                 const cost = dept.getUpgradeCost(level);
@@ -217,8 +217,8 @@ pub fn main() !void {
                             if (try ui.stdout.context.reader().readUntilDelimiterOrEof(buf[0..], '\n')) |dept_input| {
                                 const dept_choice = std.fmt.parseInt(usize, dept_input, 10) catch 0;
                                 
-                                if (dept_choice > 0 and dept_choice <= departments.len) {
-                                    const dept = departments[dept_choice - 1];
+                                if (dept_choice > 0 and dept_choice <= dept_list.len) {
+                                    const dept = dept_list[dept_choice - 1];
                                     const upgrade_result = game.upgradeDepartment(dept);
                                     
                                     if (upgrade_result) {

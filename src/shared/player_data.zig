@@ -25,7 +25,7 @@ pub const PlayerData = struct {
     unlocked_regions: std.StringHashMap(bool),
     
     // Arcade progress
-    high_scores: std.AutoHashMap([]const u8, u64),
+    high_scores: std.StringHashMap(u64),
     unlocked_arcade_features: std.StringHashMap(bool),
     
     // Achievement tracking
@@ -55,7 +55,7 @@ pub const PlayerData = struct {
             .unlocked_scenarios = std.StringHashMap(bool).init(allocator),
             .unlocked_regions = std.StringHashMap(bool).init(allocator),
             
-            .high_scores = std.AutoHashMap([]const u8, u64).init(allocator),
+            .high_scores = std.StringHashMap(u64).init(allocator),
             .unlocked_arcade_features = std.StringHashMap(bool).init(allocator),
             
             .achievements = std.StringHashMap(bool).init(allocator),
@@ -225,7 +225,7 @@ pub const PlayerData = struct {
         while (try in_stream.readUntilDelimiterOrEof(&buf, '\n')) |line| {
             if (line.len == 0) continue;
             
-            var parts = std.mem.split(u8, line, "=");
+            var parts = std.mem.splitScalar(u8, line, '=');
             const key = parts.next() orelse continue;
             const value = parts.next() orelse continue;
             
@@ -250,7 +250,7 @@ pub const PlayerData = struct {
             } else if (std.mem.eql(u8, key, "company_value")) {
                 data.company_value = try std.fmt.parseFloat(f64, value);
             } else if (std.mem.eql(u8, key, "completed_missions")) {
-                var missions_iter = std.mem.split(u8, value, ",");
+                var missions_iter = std.mem.splitScalar(u8, value, ',');
                 while (missions_iter.next()) |mission| {
                     if (mission.len > 0) {
                         const mission_key = try allocator.dupe(u8, mission);
@@ -258,7 +258,7 @@ pub const PlayerData = struct {
                     }
                 }
             } else if (std.mem.eql(u8, key, "discovered_regions")) {
-                var regions_iter = std.mem.split(u8, value, ",");
+                var regions_iter = std.mem.splitScalar(u8, value, ',');
                 while (regions_iter.next()) |region| {
                     if (region.len > 0) {
                         const region_key = try allocator.dupe(u8, region);
@@ -266,7 +266,7 @@ pub const PlayerData = struct {
                     }
                 }
             } else if (std.mem.eql(u8, key, "unlocked_scenarios")) {
-                var scenarios_iter = std.mem.split(u8, value, ",");
+                var scenarios_iter = std.mem.splitScalar(u8, value, ',');
                 while (scenarios_iter.next()) |scenario| {
                     if (scenario.len > 0) {
                         const scenario_key = try allocator.dupe(u8, scenario);
@@ -274,7 +274,7 @@ pub const PlayerData = struct {
                     }
                 }
             } else if (std.mem.eql(u8, key, "unlocked_regions")) {
-                var regions_iter = std.mem.split(u8, value, ",");
+                var regions_iter = std.mem.splitScalar(u8, value, ',');
                 while (regions_iter.next()) |region| {
                     if (region.len > 0) {
                         const region_key = try allocator.dupe(u8, region);
@@ -282,10 +282,10 @@ pub const PlayerData = struct {
                     }
                 }
             } else if (std.mem.eql(u8, key, "high_scores")) {
-                var scores_iter = std.mem.split(u8, value, ",");
+                var scores_iter = std.mem.splitScalar(u8, value, ',');
                 while (scores_iter.next()) |score_entry| {
                     if (score_entry.len > 0) {
-                        var score_parts = std.mem.split(u8, score_entry, ":");
+                        var score_parts = std.mem.splitScalar(u8, score_entry, ':');
                         const score_key = score_parts.next() orelse continue;
                         const score_value = score_parts.next() orelse continue;
                         
@@ -296,7 +296,7 @@ pub const PlayerData = struct {
                     }
                 }
             } else if (std.mem.eql(u8, key, "unlocked_arcade_features")) {
-                var features_iter = std.mem.split(u8, value, ",");
+                var features_iter = std.mem.splitScalar(u8, value, ',');
                 while (features_iter.next()) |feature| {
                     if (feature.len > 0) {
                         const feature_key = try allocator.dupe(u8, feature);
@@ -304,7 +304,7 @@ pub const PlayerData = struct {
                     }
                 }
             } else if (std.mem.eql(u8, key, "achievements")) {
-                var achievements_iter = std.mem.split(u8, value, ",");
+                var achievements_iter = std.mem.splitScalar(u8, value, ',');
                 while (achievements_iter.next()) |achievement| {
                     if (achievement.len > 0) {
                         const achievement_key = try allocator.dupe(u8, achievement);
@@ -489,7 +489,16 @@ pub fn initGlobalPlayerData(allocator: std.mem.Allocator) !void {
         return error.AlreadyInitialized;
     }
     
-    global_player_data = try PlayerData.loadFromFile(allocator, "player_data.txt");
+    // Try to load from file, create new data if file doesn't exist
+    global_player_data = PlayerData.loadFromFile(allocator, "player_data.txt") catch |err| {
+        if (err == error.FileNotFound) {
+            // If file doesn't exist, create new player data
+            global_player_data = try PlayerData.init(allocator);
+            return;
+        }
+        // For other errors, propagate them up
+        return err;
+    };
 }
 
 /// Get the global player data

@@ -1,7 +1,7 @@
 const std = @import("std");
 const terminal_ui = @import("ui/terminal_ui.zig");
 const child_process = @import("std").process;
-const player_data = @import("shared/player_data.zig");
+const player_data = @import("player_data");
 
 /// The available game modes
 pub const GameMode = enum {
@@ -64,13 +64,14 @@ pub const MainMenu = struct {
     /// Initialize a new main menu
     pub fn init(allocator: std.mem.Allocator) !MainMenu {
         // Initialize player data system
-        const has_data = player_data.initGlobalPlayerData(allocator) catch |err| blk: {
+        var has_data = true;
+        player_data.initGlobalPlayerData(allocator) catch |err| {
             std.debug.print("Warning: Failed to initialize player data: {any}\n", .{err});
-            break :blk false;
+            has_data = false;
         };
         
         return MainMenu{
-            .ui = terminal_ui.TerminalUI.init(),
+            .ui = terminal_ui.TerminalUI.init(allocator),
             .selected_mode = .campaign,
             .should_quit = false,
             .has_player_data = has_data,
@@ -81,6 +82,7 @@ pub const MainMenu = struct {
     /// Cleanup resources
     pub fn deinit(self: *MainMenu) void {
         // Clean up player data
+        _ = self; // Use parameter to avoid warning
         player_data.closeGlobalPlayerData();
     }
     
@@ -136,7 +138,7 @@ pub const MainMenu = struct {
                     
                     try self.ui.drawStatusBar(skill.name, 
                         try std.fmt.allocPrint(self.allocator, "{d:.1}", .{skill.value}), 
-                        10, '■', '□', percentage, skill_color);
+                        10, '#', '-', percentage, skill_color);
                 }
                 
                 try self.ui.stdout.print("\n", .{});
@@ -297,7 +299,7 @@ pub const MainMenu = struct {
             const percentage = skill.value / 10.0; 
             try self.ui.drawStatusBar(skill.name, 
                 try std.fmt.allocPrint(self.allocator, "{d:.1}/10.0", .{skill.value}), 
-                20, '■', '□', percentage, skill.color);
+                20, '#', '-', percentage, skill.color);
         }
         
         // Company stats
@@ -339,7 +341,7 @@ pub const MainMenu = struct {
         var achievement_iter = data.achievements.iterator();
         while (achievement_iter.next()) |entry| {
             if (entry.value_ptr.*) {
-                try self.ui.println(try std.fmt.allocPrint(self.allocator, "• {s}", .{entry.key_ptr.*}), .bright_green, .normal);
+                try self.ui.println(try std.fmt.allocPrint(self.allocator, "* {s}", .{entry.key_ptr.*}), .bright_green, .normal);
                 achievement_count += 1;
             }
         }

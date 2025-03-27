@@ -1,6 +1,6 @@
 const std = @import("std");
 const character_mode = @import("character_mode.zig");
-const terminal_ui = @import("../../ui/terminal_ui.zig");
+const terminal_ui = @import("terminal_ui");
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -8,7 +8,7 @@ pub fn main() !void {
     const allocator = gpa.allocator();
     
     // Initialize the UI
-    var ui = terminal_ui.TerminalUI.init();
+    var ui = terminal_ui.TerminalUI.init(allocator);
     
     try ui.clear();
     try ui.drawTitle("TURMOIL: Character Mode");
@@ -21,10 +21,10 @@ pub fn main() !void {
     const character_name = try characterCreation(&ui, allocator);
     
     // Character background selection
-    const background = try backgroundSelection(&ui);
+    const background = try backgroundSelection(&ui, allocator);
     
     // Trait selection
-    const trait = try traitSelection(&ui);
+    const trait = try traitSelection(&ui, allocator);
     
     // Initialize the game
     var game = try character_mode.CharacterMode.init(allocator, character_name, background);
@@ -75,8 +75,8 @@ pub fn main() !void {
         if (game.character.traits.items.len == 0) {
             try ui.println("No traits assigned yet.", .yellow, .italic);
         } else {
-            for (game.character.traits.items) |trait| {
-                try ui.println(try std.fmt.allocPrint(allocator, "{s}: {s}", .{@tagName(trait), trait.getDescription()}), .white, .normal);
+            for (game.character.traits.items) |char_trait| {
+                try ui.println(try std.fmt.allocPrint(allocator, "{s}: {s}", .{@tagName(char_trait), char_trait.getDescription()}), .white, .normal);
             }
         }
         
@@ -247,7 +247,7 @@ fn characterCreation(ui: *terminal_ui.TerminalUI, allocator: std.mem.Allocator) 
 }
 
 /// Background selection interface
-fn backgroundSelection(ui: *terminal_ui.TerminalUI) !character_mode.CharacterBackground {
+fn backgroundSelection(ui: *terminal_ui.TerminalUI, allocator: std.mem.Allocator) !character_mode.CharacterBackground {
     try ui.clear();
     try ui.drawTitle("Select Your Background");
     
@@ -261,22 +261,22 @@ fn backgroundSelection(ui: *terminal_ui.TerminalUI) !character_mode.CharacterBac
     };
     
     for (backgrounds, 0..) |background, i| {
-        try ui.print(try std.fmt.bufPrint(&[_]u8{0} ** 10, "{d}. ", .{i + 1}), .bright_white, .bold);
-        try ui.println(try std.fmt.bufPrint(&[_]u8{0} ** 100, "{s}", .{@tagName(background)}), .bright_cyan, .bold);
-        try ui.println(try std.fmt.bufPrint(&[_]u8{0} ** 200, "   {s}", .{background.getDescription()}), .white, .normal);
+        try ui.print(try std.fmt.allocPrint(allocator, "{d}. ", .{i + 1}), .bright_white, .bold);
+        try ui.println(try std.fmt.allocPrint(allocator, "{s}", .{@tagName(background)}), .bright_cyan, .bold);
+        try ui.println(try std.fmt.allocPrint(allocator, "   {s}", .{background.getDescription()}), .white, .normal);
         
         // Show starting skills
         const starting_skills = background.getStartingSkills();
         try ui.print("   Starting Skills: ", .yellow, .italic);
         
-        var skill_text: [100]u8 = undefined;
-        var skills_str: []const u8 = "";
+        var skills_str = std.ArrayList(u8).init(allocator);
+        defer skills_str.deinit();
         
         inline for (std.meta.tags(character_mode.SkillType), 0..) |skill_type, j| {
             if (starting_skills[j] > 0) {
-                const skill_desc = try std.fmt.bufPrint(&skill_text, "{s} {d}, ", .{@tagName(skill_type), starting_skills[j]});
-                skills_str = skill_desc;
-                try ui.print(skills_str, .bright_yellow, .normal);
+                try std.fmt.format(skills_str.writer(), "{s} {d}, ", .{@tagName(skill_type), starting_skills[j]});
+                try ui.print(skills_str.items, .bright_yellow, .normal);
+                skills_str.clearRetainingCapacity();
             }
         }
         
@@ -297,7 +297,7 @@ fn backgroundSelection(ui: *terminal_ui.TerminalUI) !character_mode.CharacterBac
 }
 
 /// Trait selection interface
-fn traitSelection(ui: *terminal_ui.TerminalUI) !character_mode.CharacterTrait {
+fn traitSelection(ui: *terminal_ui.TerminalUI, allocator: std.mem.Allocator) !character_mode.CharacterTrait {
     try ui.clear();
     try ui.drawTitle("Select Your Primary Trait");
     
@@ -311,10 +311,10 @@ fn traitSelection(ui: *terminal_ui.TerminalUI) !character_mode.CharacterTrait {
     };
     
     for (traits, 0..) |trait, i| {
-        try ui.print(try std.fmt.bufPrint(&[_]u8{0} ** 10, "{d}. ", .{i + 1}), .bright_white, .bold);
-        try ui.println(try std.fmt.bufPrint(&[_]u8{0} ** 100, "{s}", .{@tagName(trait)}), .bright_magenta, .bold);
-        try ui.println(try std.fmt.bufPrint(&[_]u8{0} ** 200, "   {s}", .{trait.getDescription()}), .white, .normal);
-        try ui.println(try std.fmt.bufPrint(&[_]u8{0} ** 200, "   Effect: {s}", .{trait.getEffect()}), .yellow, .italic);
+        try ui.print(try std.fmt.allocPrint(allocator, "{d}. ", .{i + 1}), .bright_white, .bold);
+        try ui.println(try std.fmt.allocPrint(allocator, "{s}", .{@tagName(trait)}), .bright_magenta, .bold);
+        try ui.println(try std.fmt.allocPrint(allocator, "   {s}", .{trait.getDescription()}), .white, .normal);
+        try ui.println(try std.fmt.allocPrint(allocator, "   Effect: {s}", .{trait.getEffect()}), .yellow, .italic);
         try ui.stdout.print("\n", .{});
     }
     
@@ -428,9 +428,9 @@ fn viewSkillDetails(ui: *terminal_ui.TerminalUI, allocator: std.mem.Allocator, g
     }
     
     try ui.println("Skills can be improved through:", .bright_white, .bold);
-    try ui.println("• Daily activities (small XP gain)", .white, .normal);
-    try ui.println("• Focused training (faster but costs money)", .white, .normal);
-    try ui.println("• Completing related quests", .white, .normal);
+    try ui.println("* Daily activities (small XP gain)", .white, .normal);
+    try ui.println("* Focused training (faster but costs money)", .white, .normal);
+    try ui.println("* Completing related quests", .white, .normal);
     
     try ui.stdout.print("\nPress Enter to continue...", .{});
     var buf: [100]u8 = undefined;

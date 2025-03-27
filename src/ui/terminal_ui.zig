@@ -70,11 +70,13 @@ pub const ChartType = enum {
 /// Terminal UI component for rendering
 pub const TerminalUI = struct {
     stdout: std.fs.File.Writer,
+    allocator: std.mem.Allocator,
     
     /// Initialize a new terminal UI
-    pub fn init() TerminalUI {
+    pub fn init(allocator: std.mem.Allocator) TerminalUI {
         return TerminalUI{
             .stdout = std.io.getStdOut().writer(),
+            .allocator = allocator,
         };
     }
     
@@ -202,7 +204,7 @@ pub const TerminalUI = struct {
         }
         
         // Create a 2D grid for the chart
-        var grid = try std.ArrayList(std.ArrayList(u8)).initCapacity(std.heap.page_allocator, chart_height);
+        var grid = try std.ArrayList(std.ArrayList(u8)).initCapacity(self.allocator, chart_height);
         defer {
             for (grid.items) |row| {
                 row.deinit();
@@ -211,7 +213,7 @@ pub const TerminalUI = struct {
         }
         
         for (0..chart_height) |_| {
-            var row = std.ArrayList(u8).init(std.heap.page_allocator);
+            var row = std.ArrayList(u8).init(self.allocator);
             try row.appendNTimes(' ', chart_width);
             try grid.append(row);
         }
@@ -227,20 +229,20 @@ pub const TerminalUI = struct {
             
             // Ensure we're in bounds
             if (x < chart_width and y < chart_height) {
-                grid.items[y].items[x] = '•';
+                grid.items[y].items[x] = '*';
             }
         }
         
         // Draw top border
-        try self.stdout.print("┌", .{});
+        try self.stdout.print("+", .{});
         for (0..chart_width) |_| {
-            try self.stdout.print("─", .{});
+            try self.stdout.print("-", .{});
         }
-        try self.stdout.print("┐\n", .{});
+        try self.stdout.print("+\n", .{});
         
         // Draw the chart
         for (grid.items) |row| {
-            try self.stdout.print("│", .{});
+            try self.stdout.print("|", .{});
             
             try self.stdout.print("\x1b[{s}m", .{color.ansiCode()});
             for (row.items) |cell| {
@@ -248,21 +250,21 @@ pub const TerminalUI = struct {
             }
             try self.stdout.print("\x1b[0m", .{});
             
-            try self.stdout.print("│\n", .{});
+            try self.stdout.print("|\n", .{});
         }
         
         // Draw bottom border
-        try self.stdout.print("└", .{});
+        try self.stdout.print("+", .{});
         for (0..chart_width) |_| {
-            try self.stdout.print("─", .{});
+            try self.stdout.print("-", .{});
         }
-        try self.stdout.print("┘\n", .{});
+        try self.stdout.print("+\n", .{});
         
         // Add some labels for context
         try self.print("Min: ", .white, .normal);
-        try self.println(try std.fmt.allocPrint(std.heap.page_allocator, "{d:.2}", .{min_value}), .bright_white, .normal);
+        try self.println(try std.fmt.allocPrint(self.allocator, "{d:.2}", .{min_value}), .bright_white, .normal);
         try self.print("Max: ", .white, .normal);
-        try self.println(try std.fmt.allocPrint(std.heap.page_allocator, "{d:.2}", .{max_value}), .bright_white, .normal);
+        try self.println(try std.fmt.allocPrint(self.allocator, "{d:.2}", .{max_value}), .bright_white, .normal);
         
         try self.stdout.print("\n", .{});
     }
@@ -304,12 +306,12 @@ pub const TerminalUI = struct {
             // Draw the bar
             try self.stdout.print("\x1b[{s}m", .{color.ansiCode()});
             for (0..bar_width) |_| {
-                try self.stdout.print("█", .{});
+                try self.stdout.print("#", .{});
             }
             try self.stdout.print("\x1b[0m", .{});
             
             // Print the value
-            try self.println(try std.fmt.allocPrint(std.heap.page_allocator, " {d:.2}", .{value}), .bright_white, .normal);
+            try self.println(try std.fmt.allocPrint(self.allocator, " {d:.2}", .{value}), .bright_white, .normal);
         }
         
         try self.stdout.print("\n", .{});
@@ -340,36 +342,36 @@ pub const TerminalUI = struct {
         }
         
         // Draw the heatmap
-        try self.stdout.print("┌", .{});
+        try self.stdout.print("+", .{});
         for (0..data[0].len) |_| {
-            try self.stdout.print("─", .{});
+            try self.stdout.print("-", .{});
         }
-        try self.stdout.print("┐\n", .{});
+        try self.stdout.print("+\n", .{});
         
         for (data) |row| {
-            try self.stdout.print("│", .{});
+            try self.stdout.print("|", .{});
             
             for (row) |value| {
                 const normalized = if (max_value > min_value) (value - min_value) / (max_value - min_value) else 0.5;
                 const color_index = @as(usize, @intFromFloat(normalized * @as(f32, @floatFromInt(color_map.len - 1))));
                 
-                try self.stdout.print("\x1b[{s}m█\x1b[0m", .{color_map[color_index].ansiCode()});
+                try self.stdout.print("\x1b[{s}m#\x1b[0m", .{color_map[color_index].ansiCode()});
             }
             
-            try self.stdout.print("│\n", .{});
+            try self.stdout.print("|\n", .{});
         }
         
-        try self.stdout.print("└", .{});
+        try self.stdout.print("+", .{});
         for (0..data[0].len) |_| {
-            try self.stdout.print("─", .{});
+            try self.stdout.print("-", .{});
         }
-        try self.stdout.print("┘\n", .{});
+        try self.stdout.print("+\n", .{});
         
         // Add some labels for context
         try self.print("Min: ", .white, .normal);
-        try self.println(try std.fmt.allocPrint(std.heap.page_allocator, "{d:.2}", .{min_value}), .bright_white, .normal);
+        try self.println(try std.fmt.allocPrint(self.allocator, "{d:.2}", .{min_value}), .bright_white, .normal);
         try self.print("Max: ", .white, .normal);
-        try self.println(try std.fmt.allocPrint(std.heap.page_allocator, "{d:.2}", .{max_value}), .bright_white, .normal);
+        try self.println(try std.fmt.allocPrint(self.allocator, "{d:.2}", .{max_value}), .bright_white, .normal);
         
         try self.stdout.print("\n", .{});
     }

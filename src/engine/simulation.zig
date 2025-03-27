@@ -1,5 +1,5 @@
 const std = @import("std");
-const oil_field = @import("oil_field.zig");
+const oil_field = @import("oil_field");
 
 /// The main simulation engine for the game
 pub const SimulationEngine = struct {

@@ -1,7 +1,8 @@
 const std = @import("std");
-const base_oil_field = @import("../../engine/oil_field.zig");
-const base_simulation = @import("../../engine/simulation.zig");
-const player_data = @import("../../shared/player_data.zig");
+const random = @import("std").crypto.random;  // Use crypto.random instead of std.rand
+const base_oil_field = @import("oil_field");
+const base_simulation = @import("simulation");
+const player_data = @import("player_data");
 
 /// Weather conditions that can affect oil operations
 pub const WeatherCondition = enum {
@@ -94,8 +95,8 @@ pub const RegionType = enum {
     /// Generate weather condition based on day and region
     pub fn generateWeather(self: RegionType, day: u32) WeatherCondition {
         // Use day as pseudo-random source for deterministic weather
-        var probs = self.getWeatherProbabilities();
-        var day_value = @mod(day * day, 1000) / 1000.0;
+        const probs = self.getWeatherProbabilities();
+        const day_value = @as(f32, @floatFromInt(@mod(day * day, 1000))) / 1000.0;
         
         // Convert day value to weather condition based on probability thresholds
         var cumulative: f32 = 0.0;
@@ -164,7 +165,7 @@ pub const WeatherSystem = struct {
         var report = std.ArrayList(u8).init(allocator);
         defer report.deinit();
         
-        var writer = report.writer();
+        const writer = report.writer();
         
         try writer.print("WEATHER REPORT - {s} REGION\n", .{self.region_type.getDescription()});
         try writer.print("Current conditions: {s}\n", .{@tagName(self.current_condition)});
@@ -191,14 +192,19 @@ pub const SandboxOilField = struct {
     
     /// Initialize a new sandbox oil field
     pub fn init(allocator: std.mem.Allocator, name: []const u8, size: f32, extraction_rate: f32, quality: f32, depth: f32) !SandboxOilField {
-        var base_field = base_oil_field.OilField.init(size, extraction_rate);
-        base_field.quality = quality;
-        base_field.depth = depth;
+        var field = base_oil_field.OilField.init(
+            size,
+            extraction_rate
+        );
+        
+        // Set quality and depth directly on the mutable variable
+        field.quality = quality;
+        field.depth = depth;
         
         const field_name = try allocator.dupe(u8, name);
         
         return SandboxOilField{
-            .base = base_field,
+            .base = field,
             .custom_name = field_name,
             .discovery_date = 0,
             .custom_notes = null,
@@ -228,7 +234,7 @@ pub const MarketScenario = enum {
     stable,
     boom,
     bust,
-    volatile,
+    fluctuating,
     shortage,
     oversupply,
     
@@ -238,7 +244,7 @@ pub const MarketScenario = enum {
             .stable => 50.0,
             .boom => 80.0,
             .bust => 30.0,
-            .volatile => 60.0,
+            .fluctuating => 60.0,
             .shortage => 90.0,
             .oversupply => 25.0,
         };
@@ -250,7 +256,7 @@ pub const MarketScenario = enum {
             .stable => 0.05, // 5% max change
             .boom => 0.1,    // 10% max change
             .bust => 0.1,    // 10% max change
-            .volatile => 0.25, // 25% max change
+            .fluctuating => 0.25,
             .shortage => 0.15, // 15% max change
             .oversupply => 0.08, // 8% max change
         };
@@ -262,7 +268,7 @@ pub const MarketScenario = enum {
             .stable => 1.0,
             .boom => 1.3,
             .bust => 0.7,
-            .volatile => 1.0,
+            .fluctuating => 1.0,
             .shortage => 1.2,
             .oversupply => 0.8,
         };
@@ -274,7 +280,7 @@ pub const MarketScenario = enum {
             .stable => "Steady prices with minimal fluctuations",
             .boom => "High prices with upward pressure",
             .bust => "Low prices with downward pressure",
-            .volatile => "Unpredictable price swings in both directions",
+            .fluctuating => "Unpredictable price swings in both directions",
             .shortage => "Supply constraints driving prices higher",
             .oversupply => "Excess production depressing prices",
         };
@@ -340,7 +346,7 @@ pub const SandboxMode = struct {
     
     /// Initialize a new sandbox mode
     pub fn init(allocator: std.mem.Allocator) !SandboxMode {
-        var simulation = try base_simulation.SimulationEngine.init(allocator);
+        const simulation = try base_simulation.SimulationEngine.init(allocator);
         
         // Default to temperate region
         const region = RegionType.temperate;
@@ -391,10 +397,8 @@ pub const SandboxMode = struct {
     
     /// Clean up resources
     pub fn deinit(self: *SandboxMode) void {
-        for (self.oil_fields.items) |field| {
-            if (field.custom_notes) |notes| {
-                self.allocator.free(notes);
-            }
+        for (self.oil_fields.items) |*field| {
+            field.deinit(self.allocator);
         }
         
         self.oil_fields.deinit();
@@ -428,18 +432,19 @@ pub const SandboxMode = struct {
             }
         }
         
-        var field = try base_oil_field.OilField.init(
-            self.allocator,
+        var field = base_oil_field.OilField.init(
             modified_size,
-            modified_rate,
-            quality
+            modified_rate
         );
         
-        var sandbox_field = SandboxOilField{
+        // Set quality and depth directly on the mutable variable
+        field.quality = quality;
+        field.depth = depth_multiplier;
+        
+        const sandbox_field = SandboxOilField{
             .base = field,
             .custom_name = try self.allocator.dupe(u8, name),
             .discovery_date = self.current_day,
-            .depth_multiplier = depth_multiplier,
             .custom_notes = null,
         };
         
@@ -452,7 +457,10 @@ pub const SandboxMode = struct {
                 data.largest_oilfield_size = modified_size;
                 
                 // Try to save data
-                _ = player_data.saveGlobalPlayerData() catch {};
+                try data.unlockAchievement("oil_baron");
+                player_data.saveGlobalPlayerData() catch |err| {
+                    std.debug.print("Warning: Failed to save player data: {any}\n", .{err});
+                };
             }
         }
     }
@@ -478,6 +486,7 @@ pub const SandboxMode = struct {
             .disaster_chance = disaster_chance,
             .regulatory_pressure = regulatory_pressure,
             .public_opinion = public_opinion,
+            .cleanup_cost_multiplier = 1.0,
         };
     }
     
@@ -487,13 +496,15 @@ pub const SandboxMode = struct {
         const volatility = self.market_scenario.getVolatility();
         
         // Generate a random price fluctuation
-        var prng = std.rand.DefaultPrng.init(@intCast(self.current_day));
-        var rand = prng.random();
+        var rand_val1: f32 = undefined;
+        var rand_val2: f32 = undefined;
+        random.bytes(std.mem.asBytes(&rand_val1));
+        random.bytes(std.mem.asBytes(&rand_val2));
+        rand_val1 = @abs(rand_val1) / std.math.floatMax(f32); // Normalize to 0-1
+        rand_val2 = @abs(rand_val2) / std.math.floatMax(f32); // Normalize to 0-1
         
         // Normal distribution approximation
-        const u1 = rand.float(f32);
-        const u2 = rand.float(f32);
-        const z = @sqrt(-2.0 * @log(u1)) * @cos(2.0 * std.math.pi * u2);
+        const z = @sqrt(-2.0 * @log(rand_val1 + 0.00001)) * @cos(2.0 * std.math.pi * rand_val2);
         const price_change = z * volatility * base_price;
         
         // Apply scenario-specific trends
@@ -513,8 +524,8 @@ pub const SandboxMode = struct {
         
         // Calculate new price with limits to prevent negative or extreme values
         var new_price = self.simulation.oil_price + price_change + trend;
-        new_price = std.math.max(new_price, base_price * 0.5);
-        new_price = std.math.min(new_price, base_price * 2.0);
+        new_price = @max(new_price, base_price * 0.5);
+        new_price = @min(new_price, base_price * 2.0);
         
         // Apply player negotiation skill bonus if available
         if (self.player_bonuses) |bonuses| {
@@ -546,17 +557,20 @@ pub const SandboxMode = struct {
         disaster_chance *= (1.0 - (self.environmental_factors.regulatory_pressure * 0.5));
         
         // Basic random check for disaster
-        var prng = std.rand.DefaultPrng.init(@intCast(self.current_day));
-        var rand = prng.random();
+        var rand_val: f32 = undefined;
+        random.bytes(std.mem.asBytes(&rand_val));
+        rand_val = @abs(rand_val) / std.math.floatMax(f32); // Normalize to 0-1
         
-        if (rand.float(f32) < disaster_chance) {
+        if (rand_val < disaster_chance) {
             // A disaster has occurred
-            const field_index = rand.uintLessThan(usize, self.oil_fields.items.len);
+            var field_index_rand: usize = undefined;
+            random.bytes(std.mem.asBytes(&field_index_rand));
+            const field_index = field_index_rand % self.oil_fields.items.len;
             
             // Calculate cleanup cost based on field size and environmental factors
             const field = self.oil_fields.items[field_index];
             const field_size = field.base.max_capacity;
-            const base_cleanup_cost = field_size * 0.5 * field.depth_multiplier;
+            const base_cleanup_cost = field_size * 0.5 * field.base.depth;
             
             // Higher public opinion means higher cleanup costs (more pressure to do it right)
             const cleanup_multiplier = 1.0 + (self.environmental_factors.public_opinion * 0.5);
@@ -585,10 +599,13 @@ pub const SandboxMode = struct {
             
             // Update company reputation in player data
             if (player_data.getGlobalPlayerData()) |data| {
-                data.company_reputation = std.math.max(0.0, data.company_reputation - (reputation_damage * 100.0));
+                data.company_reputation = @max(0.0, data.company_reputation - (reputation_damage * 100.0));
                 
                 // Try to save data
-                _ = player_data.saveGlobalPlayerData() catch {};
+                try data.unlockAchievement("eco_friendly");
+                player_data.saveGlobalPlayerData() catch |err| {
+                    std.debug.print("Warning: Failed to save player data: {any}\n", .{err});
+                };
             }
         }
     }
@@ -629,14 +646,15 @@ pub const SandboxMode = struct {
             try self.simulation.step(1.0);
             
             // Apply additional costs based on weather
-            var operational_costs = self.simulation.oil_fields.items.len * 10.0 * cost_multiplier;
+            const operational_costs = @as(f32, @floatFromInt(self.simulation.oil_fields.items.len)) * 10.0 * cost_multiplier;
             
             // Apply management efficiency bonus to operational costs if available
+            var final_operational_costs = operational_costs;
             if (self.player_bonuses) |bonuses| {
-                operational_costs = bonuses.applyToOperationalCosts(operational_costs);
+                final_operational_costs = bonuses.applyToOperationalCosts(operational_costs);
             }
             
-            self.simulation.money -= operational_costs;
+            self.simulation.money -= final_operational_costs;
             
             // Restore original extraction rates
             for (self.simulation.oil_fields.items, 0..) |*field, idx| {
@@ -669,7 +687,10 @@ pub const SandboxMode = struct {
                 data.company_value = @as(f64, @floatCast(self.simulation.money)) * 1.5;
                 
                 // Try to save data
-                _ = player_data.saveGlobalPlayerData() catch {};
+                try data.unlockAchievement("supply_demand");
+                player_data.saveGlobalPlayerData() catch |err| {
+                    std.debug.print("Warning: Failed to save player data: {any}\n", .{err});
+                };
             }
         }
     }
@@ -679,7 +700,7 @@ pub const SandboxMode = struct {
         var report = std.ArrayList(u8).init(allocator);
         defer report.deinit();
         
-        var writer = report.writer();
+        const writer = report.writer();
         
         try writer.print("=== Sandbox Simulation Report (Day {d}) ===\n\n", .{self.current_day});
         
@@ -756,6 +777,7 @@ pub const SandboxMode = struct {
 /// Structure representing an environmental disaster event
 pub const DisasterEvent = struct {
     day: u32,
+    field_index: usize,
     field_name: []const u8,
     cleanup_cost: f32,
     reputation_damage: f32,

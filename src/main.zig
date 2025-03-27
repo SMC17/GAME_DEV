@@ -1,8 +1,8 @@
 const std = @import("std");
-const oil_field = @import("engine/oil_field.zig");
-const simulation = @import("engine/simulation.zig");
+const oil_field = @import("oil_field");
+const simulation = @import("simulation");
 const main_menu = @import("main_menu.zig");
-const player_data = @import("shared/player_data.zig");
+const player_data = @import("player_data");
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -22,26 +22,11 @@ pub fn runSimulationDemo(allocator: std.mem.Allocator) !void {
     defer sim.deinit();
     
     // Create some oil fields
-    var small_field = try oil_field.OilField.init(
-        allocator,
-        1000.0, // capacity
-        5.0,    // extraction rate
-        1.0     // quality
-    );
+    const small_field = oil_field.OilField.init(1000.0, 5.0);
     
-    var medium_field = try oil_field.OilField.init(
-        allocator,
-        5000.0, // capacity
-        10.0,   // extraction rate
-        0.9     // quality
-    );
+    const medium_field = oil_field.OilField.init(5000.0, 10.0);
     
-    var large_field = try oil_field.OilField.init(
-        allocator,
-        10000.0, // capacity
-        15.0,    // extraction rate
-        0.8      // quality
-    );
+    const large_field = oil_field.OilField.init(10000.0, 15.0);
     
     try sim.addOilField(small_field);
     try sim.addOilField(medium_field);
@@ -75,7 +60,9 @@ pub fn runSimulationDemo(allocator: std.mem.Allocator) !void {
     // If we have player data, record an achievement for running the simulation
     if (player_data.getGlobalPlayerData()) |data| {
         try data.unlockAchievement("ran_simulation_demo");
-        _ = player_data.saveGlobalPlayerData() catch {};
+        player_data.saveGlobalPlayerData() catch |err| {
+            std.debug.print("Warning: Failed to save player data: {any}\n", .{err});
+        };
     }
 }
 

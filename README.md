@@ -27,6 +27,8 @@ The game is currently in early prototype stage, following a 20-week development 
 - Arcade mode with time-based challenges and scoring system
 - Terminal-based UI with colorful menus and status displays
 - Central game launcher to access all modes
+- Cross-platform compatibility with ASCII terminal UI
+- Memory-safe implementation with proper resource management
 
 Check out our [Milestone 1 Report](docs/MILESTONE1.md) for detailed information on our progress and next steps.
 
