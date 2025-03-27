@@ -1,19 +1,28 @@
 const std = @import("std");
+const main_menu = @import("main_menu");
+const player_data = @import("player_data");
 const oil_field = @import("oil_field");
 const simulation = @import("simulation");
-const main_menu = @import("main_menu.zig");
-const player_data = @import("player_data");
 
 pub fn main() !void {
+    // Create a general purpose allocator
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
+    
     const allocator = gpa.allocator();
     
-    // Launch the main menu with player data integration
+    // Print welcome message
+    std.debug.print("\nTURMOIL: Oil Industry Simulation Game\n", .{});
+    std.debug.print("-------------------------------------\n\n", .{});
+    
+    // Initialize and run the main menu
     var menu = try main_menu.MainMenu.init(allocator);
     defer menu.deinit();
     
     try menu.run();
+    
+    // Clean exit
+    std.debug.print("\nThank you for playing TURMOIL!\n", .{});
 }
 
 // This is the original simulation demo, kept as a reference
@@ -59,7 +68,7 @@ pub fn runSimulationDemo(allocator: std.mem.Allocator) !void {
     
     // If we have player data, record an achievement for running the simulation
     if (player_data.getGlobalPlayerData()) |data| {
-        try data.unlockAchievement("ran_simulation_demo");
+        try data.addTechnology("ran_simulation_demo");
         player_data.saveGlobalPlayerData() catch |err| {
             std.debug.print("Warning: Failed to save player data: {any}\n", .{err});
         };

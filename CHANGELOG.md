@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Comprehensive market simulation for Tycoon Mode
+  - Dynamic supply/demand economics affecting oil prices
+  - AI competitor companies with unique strategies
+  - Random world events that impact market conditions
+  - Visual line charts for price and demand history
+  - Detailed market information screen
+- Enhanced terminal UI with line chart visualization
 - Multi-platform build support in CI/CD
 - Additional unit tests for core simulation logic
 - Memory leak detection in development workflow
@@ -24,8 +31,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Memory leaks in SandboxMode oil field deinitialization
 - Missing argument parameters in allocPrint calls
 - Added missing cleanup_cost_multiplier field in sandbox_mode
+- Fixed null pointer dereference in campaign_runner.zig by adding player data initialization
+- Corrected TerminalUI initialization in tycoon_runner.zig, character_runner.zig, and sandbox_runner.zig
+- Added missing color parameter to drawTitle calls in character_runner.zig
 
-## [0.2.0] - 2023-06-15
+## [0.2.0] - 2025-03-26
 
 ### Added
 - Tycoon Mode with economic simulation and corporate management
@@ -42,7 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Memory leaks in simulation engine
 - UI display bugs in Campaign mode
 
-## [0.1.0] - 2023-04-30
+## [0.1.0] - 2025-03-25
 
 ### Added
 - Core simulation engine for oil extraction

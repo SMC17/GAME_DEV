@@ -8,10 +8,10 @@ pub fn main() !void {
     const allocator = gpa.allocator();
     
     // Initialize the UI
-    var ui = terminal_ui.TerminalUI.init(allocator);
+    var ui = terminal_ui.TerminalUI.init(std.io.getStdOut().writer(), allocator);
     
     try ui.clear();
-    try ui.drawTitle("TURMOIL: Character Mode");
+    try ui.drawTitle("TURMOIL: Character Mode", .cyan);
     
     try ui.println("Welcome to Character Mode! Build your career in the oil industry.", .bright_green, .bold);
     try ui.println("Develop skills, complete quests, and forge your own path to success.", .white, .normal);

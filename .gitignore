@@ -28,3 +28,7 @@ Thumbs.db
 
 # Benchmark reports (only include if intended)
 /benchmarks/*.json 
+
+#inital docs
+initial_doc_1.txt
+initial_doc_2.txt

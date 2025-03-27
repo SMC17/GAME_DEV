@@ -73,9 +73,9 @@ pub const TerminalUI = struct {
     allocator: std.mem.Allocator,
     
     /// Initialize a new terminal UI
-    pub fn init(allocator: std.mem.Allocator) TerminalUI {
+    pub fn init(writer: std.fs.File.Writer, allocator: std.mem.Allocator) TerminalUI {
         return TerminalUI{
-            .stdout = std.io.getStdOut().writer(),
+            .stdout = writer,
             .allocator = allocator,
         };
     }
@@ -108,13 +108,18 @@ pub const TerminalUI = struct {
         try self.stdout.print("\x1b[0m\n", .{});
     }
     
+    /// Draw a horizontal line with default settings (width 80, '-' character)
+    pub fn drawDefaultHorizontalLine(self: *TerminalUI) !void {
+        try self.drawHorizontalLine(80, '-', .white);
+    }
+    
     /// Draw a title banner
-    pub fn drawTitle(self: *TerminalUI, title: []const u8) !void {
+    pub fn drawTitle(self: *TerminalUI, title: []const u8, color: TextColor) !void {
         const padding = 4;
         const total_width = title.len + (padding * 2);
         
-        try self.drawHorizontalLine(total_width, '=', .bright_yellow);
-        try self.stdout.print("\x1b[{s}m", .{TextColor.bright_yellow.ansiCode()});
+        try self.drawHorizontalLine(total_width, '=', color);
+        try self.stdout.print("\x1b[{s}m", .{color.ansiCode()});
         
         // Print padding
         var i: usize = 0;
@@ -132,7 +137,7 @@ pub const TerminalUI = struct {
         }
         
         try self.stdout.print("\n\x1b[0m", .{});
-        try self.drawHorizontalLine(total_width, '=', .bright_yellow);
+        try self.drawHorizontalLine(total_width, '=', color);
         try self.stdout.print("\n", .{});
     }
     
@@ -179,6 +184,27 @@ pub const TerminalUI = struct {
         }
         
         try self.stdout.print("\n", .{});
+    }
+    
+    /// Draw a menu with selectable options, then wait for user input and return the selected option
+    pub fn drawMenuAndGetChoice(self: *TerminalUI, options: []const []const u8, normal_color: TextColor, selected_color: TextColor) !usize {
+        try self.println("Actions:", .yellow, .bold);
+        
+        for (options, 0..) |option, i| {
+            if (i == 0) { // Default selected
+                try self.print("> ", selected_color, .bold);
+                try self.println(option, selected_color, .normal);
+            } else {
+                try self.print("  ", normal_color, .normal);
+                try self.println(option, normal_color, .normal);
+            }
+        }
+        
+        try self.stdout.print("\n", .{});
+        
+        // Simple implementation: just return first option for now
+        // In a real implementation, this would handle keyboard input and selection
+        return 0;
     }
     
     /// Draw a line chart for visualizing time-series data

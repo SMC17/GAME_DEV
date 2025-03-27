@@ -1,5 +1,8 @@
 const std = @import("std");
-const oil_field = @import("oil_field.zig");
+const oil_field = @import("oil_field");
+const simulation = @import("simulation");
+const player_data = @import("player_data");
+const terminal_ui = @import("terminal_ui");
 
 /// Difficulty level for arcade mode
 pub const DifficultyLevel = enum {
@@ -161,4 +164,25 @@ pub const ArcadeMode = struct {
             self.high_scores.shrinkRetainingCapacity(10);
         }
     }
-}; 
+};
+
+/// Run the arcade mode
+pub fn run() !void {
+    // Get stdout for terminal output
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    
+    const allocator = gpa.allocator();
+    
+    // Initialize the terminal UI
+    var ui = terminal_ui.TerminalUI.init(std.io.getStdOut().writer(), allocator);
+    
+    try ui.clear();
+    try ui.drawTitle("Arcade Mode", .green);
+    try ui.println("Welcome to Arcade Mode - Fast-paced oil extraction challenges!", .white, .normal);
+    try ui.println("\nThis mode is currently under development.", .yellow, .italic);
+    try ui.println("\nPress any key to return to the main menu...", .white, .normal);
+    
+    // Wait for user input
+    _ = try std.io.getStdIn().reader().readByte();
+} 

@@ -9,7 +9,7 @@ pub fn main() !void {
     const allocator = gpa.allocator();
     
     // Initialize the UI
-    var ui = terminal_ui.TerminalUI.init(allocator);
+    var ui = terminal_ui.TerminalUI.init(std.io.getStdOut().writer(), allocator);
     
     try ui.clear();
     try ui.drawTitle("TURMOIL: Tycoon Mode");
@@ -53,6 +53,19 @@ pub fn main() !void {
         try ui.print("Oil Price: ", .white, .normal);
         try ui.println(try std.fmt.allocPrint(allocator, "${d:.2} per barrel", .{game.oil_price}), .bright_white, .bold);
         
+        try ui.print("Market Share: ", .white, .normal);
+        try ui.println(try std.fmt.allocPrint(allocator, "{d:.2}%", .{game.player_market_share * 100.0}), .bright_cyan, .bold);
+        
+        try ui.print("Market Trend: ", .white, .normal);
+        const trend = game.market.getMarketTrend();
+        const trend_color: terminal_ui.TextColor = if (std.mem.eql(u8, trend, "Strong Upward") or std.mem.eql(u8, trend, "Upward")) 
+            .bright_green 
+        else if (std.mem.eql(u8, trend, "Strong Downward") or std.mem.eql(u8, trend, "Downward")) 
+            .bright_red 
+        else 
+            .bright_white;
+        try ui.println(try std.fmt.allocPrint(allocator, "{s}", .{trend}), trend_color, .bold);
+        
         try ui.print("Operating Costs: ", .white, .normal);
         try ui.println(try std.fmt.allocPrint(allocator, "${d:.2} per day", .{game.operating_costs}), .yellow, .normal);
         
@@ -60,6 +73,18 @@ pub fn main() !void {
         const rep_percentage = game.company_reputation * 100.0;
         const rep_color: terminal_ui.TextColor = if (rep_percentage < 30.0) .red else if (rep_percentage < 70.0) .yellow else .bright_green;
         try ui.println(try std.fmt.allocPrint(allocator, "{d:.1}%", .{rep_percentage}), rep_color, .normal);
+        
+        // Display active world events
+        const active_events = game.market.getActiveEvents();
+        if (active_events.len > 0) {
+            try ui.stdout.print("\n", .{});
+            try ui.println("Active World Events:", .bright_red, .bold);
+            for (active_events) |event| {
+                try ui.print(try std.fmt.allocPrint(allocator, "{s}: ", .{event.name}), .bright_yellow, .bold);
+                try ui.println(event.description, .white, .normal);
+                try ui.println(try std.fmt.allocPrint(allocator, "  Duration: Day {d}/{d}", .{event.days_active + 1, event.duration_days}), .yellow, .italic);
+            }
+        }
         
         try ui.stdout.print("\n", .{});
         
@@ -125,6 +150,7 @@ pub fn main() !void {
             "Purchase Oil Field",
             "Upgrade Department",
             "Start Research Project",
+            "View Market Details",
             "View Detailed Reports",
             "Quit Game",
         };
@@ -277,7 +303,79 @@ pub fn main() !void {
                                 }
                             }
                         },
-                        4 => { // View Detailed Reports
+                        4 => { // View Market Details
+                            try ui.clear();
+                            try ui.drawTitle("Market Details");
+                            
+                            // Display market statistics
+                            try ui.println("Global Market Statistics:", .bright_cyan, .bold);
+                            try ui.print("Global Demand: ", .white, .normal);
+                            try ui.println(try std.fmt.allocPrint(allocator, "{d:.2} million barrels/day", .{game.market.global_demand}), .bright_white, .bold);
+                            
+                            try ui.print("Global Supply: ", .white, .normal);
+                            try ui.println(try std.fmt.allocPrint(allocator, "{d:.2} million barrels/day", .{game.market.global_supply}), .bright_white, .bold);
+                            
+                            try ui.print("Supply/Demand Ratio: ", .white, .normal);
+                            const ratio = game.market.global_supply / game.market.global_demand;
+                            const ratio_color: terminal_ui.TextColor = if (ratio > 1.1) .red else if (ratio < 0.9) .bright_green else .yellow;
+                            try ui.println(try std.fmt.allocPrint(allocator, "{d:.2}", .{ratio}), ratio_color, .bold);
+                            
+                            try ui.print("Market Volatility: ", .white, .normal);
+                            try ui.println(try std.fmt.allocPrint(allocator, "{d:.1}%", .{game.market.volatility * 100.0}), .yellow, .bold);
+                            
+                            // Competitor information
+                            try ui.stdout.print("\n", .{});
+                            try ui.println("Competitor Analysis:", .bright_cyan, .bold);
+                            
+                            // Show player's own stats first
+                            try ui.print("Your Company: ", .bright_green, .bold);
+                            try ui.println(try std.fmt.allocPrint(allocator, "{d:.2}% market share, {d:.1} barrels/day", 
+                                .{game.player_market_share * 100.0, game.player_production_rate}), .bright_white, .normal);
+                            
+                            // Show competitors
+                            for (game.market.competitors.items) |competitor| {
+                                // Format market share percentage
+                                try ui.print(try std.fmt.allocPrint(allocator, "{s}: ", .{competitor.name}), .white, .bold);
+                                try ui.println(try std.fmt.allocPrint(allocator, "{d:.2}% market share, {d:.1} barrels/day, {d} fields", 
+                                    .{competitor.size * 100.0, competitor.production_rate, competitor.fields_owned}), .bright_white, .normal);
+                                
+                                // Display competitor strategy
+                                const strategy = if (competitor.aggressiveness > 0.7) 
+                                    "Aggressive expansion" 
+                                else if (competitor.aggressiveness > 0.4) 
+                                    "Balanced growth" 
+                                else 
+                                    "Conservative approach";
+                                
+                                try ui.println(try std.fmt.allocPrint(allocator, "   Strategy: {s}, Tech Level: {d:.1}%, Reputation: {d:.1}%", 
+                                    .{strategy, competitor.technological_level * 100.0, competitor.reputation * 100.0}), .yellow, .italic);
+                            }
+                            
+                            // Price history chart (simplified as text for now)
+                            try ui.stdout.print("\n", .{});
+                            try ui.println("Price History (Last 7 Days):", .bright_cyan, .bold);
+                            
+                            const history_len = game.market.price_history.items.len;
+                            const start_idx = if (history_len < 7) 0 else history_len - 7;
+                            
+                            for (game.market.price_history.items[start_idx..], 0..) |price, i| {
+                                const day = game.game_days - @as(u32, @intCast(history_len - start_idx - i));
+                                try ui.print(try std.fmt.allocPrint(allocator, "Day {d}: ", .{day}), .white, .normal);
+                                try ui.println(try std.fmt.allocPrint(allocator, "${d:.2}", .{price}), .bright_white, .bold);
+                            }
+                            
+                            // Draw price history chart
+                            try ui.stdout.print("\n", .{});
+                            try ui.drawLineChart("Oil Price Trend", game.market.price_history.items, 50, 10, .bright_cyan);
+                            
+                            // Draw demand history chart
+                            try ui.stdout.print("\n", .{});
+                            try ui.drawLineChart("Global Demand Trend (Million Barrels/Day)", game.market.demand_history.items, 50, 10, .bright_green);
+                            
+                            try ui.stdout.print("\nPress Enter to continue...", .{});
+                            _ = try ui.stdout.context.reader().readUntilDelimiterOrEof(buf[0..], '\n');
+                        },
+                        5 => { // View Detailed Reports
                             try ui.clear();
                             try ui.drawTitle("Detailed Reports");
                             
@@ -335,7 +433,7 @@ pub fn main() !void {
                             try ui.stdout.print("\nPress Enter to continue...", .{});
                             _ = try ui.stdout.context.reader().readUntilDelimiterOrEof(buf[0..], '\n');
                         },
-                        5 => { // Quit Game
+                        6 => { // Quit Game
                             running = false;
                         },
                         else => {},

@@ -8,7 +8,7 @@ pub fn main() !void {
     const allocator = gpa.allocator();
     
     // Initialize the UI
-    var ui = terminal_ui.TerminalUI.init(allocator);
+    var ui = terminal_ui.TerminalUI.init(std.io.getStdOut().writer(), allocator);
     
     try ui.clear();
     try ui.drawTitle("TURMOIL: Sandbox Mode");
