@@ -60,6 +60,13 @@ pub const TextStyle = enum {
     }
 };
 
+/// Chart types for visualization
+pub const ChartType = enum {
+    line,
+    bar,
+    area,
+};
+
 /// Terminal UI component for rendering
 pub const TerminalUI = struct {
     stdout: std.fs.File.Writer,
@@ -168,6 +175,201 @@ pub const TerminalUI = struct {
                 try self.println(option, .white, .normal);
             }
         }
+        
+        try self.stdout.print("\n", .{});
+    }
+    
+    /// Draw a line chart for visualizing time-series data
+    pub fn drawLineChart(self: *TerminalUI, title: []const u8, data: []const f32, chart_width: usize, chart_height: usize, color: TextColor) !void {
+        if (data.len == 0 or chart_height == 0 or chart_width == 0) {
+            return;
+        }
+        
+        try self.println(title, .bright_cyan, .bold);
+        
+        // Find min and max values
+        var min_value: f32 = data[0];
+        var max_value: f32 = data[0];
+        
+        for (data) |value| {
+            min_value = @min(min_value, value);
+            max_value = @max(max_value, value);
+        }
+        
+        // Ensure range isn't zero to avoid division by zero
+        if (min_value == max_value) {
+            max_value += 1.0;
+        }
+        
+        // Create a 2D grid for the chart
+        var grid = try std.ArrayList(std.ArrayList(u8)).initCapacity(std.heap.page_allocator, chart_height);
+        defer {
+            for (grid.items) |row| {
+                row.deinit();
+            }
+            grid.deinit();
+        }
+        
+        for (0..chart_height) |_| {
+            var row = std.ArrayList(u8).init(std.heap.page_allocator);
+            try row.appendNTimes(' ', chart_width);
+            try grid.append(row);
+        }
+        
+        // Calculate plot points
+        const x_step = if (data.len > 1) @as(f32, @floatFromInt(chart_width - 1)) / @as(f32, @floatFromInt(data.len - 1)) else 0;
+        const y_range = max_value - min_value;
+        
+        for (data, 0..) |value, i| {
+            const x = @as(usize, @intFromFloat(@as(f32, @floatFromInt(i)) * x_step));
+            const normalized = if (y_range > 0) (value - min_value) / y_range else 0.5;
+            const y = chart_height - 1 - @as(usize, @intFromFloat(normalized * @as(f32, @floatFromInt(chart_height - 1))));
+            
+            // Ensure we're in bounds
+            if (x < chart_width and y < chart_height) {
+                grid.items[y].items[x] = '•';
+            }
+        }
+        
+        // Draw top border
+        try self.stdout.print("┌", .{});
+        for (0..chart_width) |_| {
+            try self.stdout.print("─", .{});
+        }
+        try self.stdout.print("┐\n", .{});
+        
+        // Draw the chart
+        for (grid.items) |row| {
+            try self.stdout.print("│", .{});
+            
+            try self.stdout.print("\x1b[{s}m", .{color.ansiCode()});
+            for (row.items) |cell| {
+                try self.stdout.writeByte(cell);
+            }
+            try self.stdout.print("\x1b[0m", .{});
+            
+            try self.stdout.print("│\n", .{});
+        }
+        
+        // Draw bottom border
+        try self.stdout.print("└", .{});
+        for (0..chart_width) |_| {
+            try self.stdout.print("─", .{});
+        }
+        try self.stdout.print("┘\n", .{});
+        
+        // Add some labels for context
+        try self.print("Min: ", .white, .normal);
+        try self.println(try std.fmt.allocPrint(std.heap.page_allocator, "{d:.2}", .{min_value}), .bright_white, .normal);
+        try self.print("Max: ", .white, .normal);
+        try self.println(try std.fmt.allocPrint(std.heap.page_allocator, "{d:.2}", .{max_value}), .bright_white, .normal);
+        
+        try self.stdout.print("\n", .{});
+    }
+    
+    /// Draw a bar chart for visualizing categorical data
+    pub fn drawBarChart(self: *TerminalUI, title: []const u8, categories: []const []const u8, values: []const f32, max_width: usize, color: TextColor) !void {
+        if (categories.len == 0 or categories.len != values.len) {
+            return;
+        }
+        
+        try self.println(title, .bright_cyan, .bold);
+        
+        // Find max value for scaling
+        var max_value: f32 = 0;
+        for (values) |value| {
+            max_value = @max(max_value, value);
+        }
+        
+        // Ensure max_value isn't zero to avoid division by zero
+        if (max_value == 0) {
+            max_value = 1;
+        }
+        
+        // Find longest category name for alignment
+        var max_category_len: usize = 0;
+        for (categories) |category| {
+            max_category_len = @max(max_category_len, category.len);
+        }
+        
+        // Draw each bar
+        for (categories, 0..) |category, i| {
+            const value = values[i];
+            const normalized = value / max_value;
+            const bar_width = @as(usize, @intFromFloat(normalized * @as(f32, @floatFromInt(max_width))));
+            
+            // Pad the category name for alignment
+            try self.stdout.print("{s: <[1]}", .{category, max_category_len + 2});
+            
+            // Draw the bar
+            try self.stdout.print("\x1b[{s}m", .{color.ansiCode()});
+            for (0..bar_width) |_| {
+                try self.stdout.print("█", .{});
+            }
+            try self.stdout.print("\x1b[0m", .{});
+            
+            // Print the value
+            try self.println(try std.fmt.allocPrint(std.heap.page_allocator, " {d:.2}", .{value}), .bright_white, .normal);
+        }
+        
+        try self.stdout.print("\n", .{});
+    }
+    
+    /// Draw a heatmap for 2D data
+    pub fn drawHeatmap(self: *TerminalUI, title: []const u8, data: []const []const f32, color_map: []const TextColor) !void {
+        if (data.len == 0 or data[0].len == 0) {
+            return;
+        }
+        
+        try self.println(title, .bright_cyan, .bold);
+        
+        // Find min and max values
+        var min_value: f32 = data[0][0];
+        var max_value: f32 = data[0][0];
+        
+        for (data) |row| {
+            for (row) |value| {
+                min_value = @min(min_value, value);
+                max_value = @max(max_value, value);
+            }
+        }
+        
+        // Ensure range isn't zero to avoid division by zero
+        if (min_value == max_value) {
+            max_value += 1.0;
+        }
+        
+        // Draw the heatmap
+        try self.stdout.print("┌", .{});
+        for (0..data[0].len) |_| {
+            try self.stdout.print("─", .{});
+        }
+        try self.stdout.print("┐\n", .{});
+        
+        for (data) |row| {
+            try self.stdout.print("│", .{});
+            
+            for (row) |value| {
+                const normalized = if (max_value > min_value) (value - min_value) / (max_value - min_value) else 0.5;
+                const color_index = @as(usize, @intFromFloat(normalized * @as(f32, @floatFromInt(color_map.len - 1))));
+                
+                try self.stdout.print("\x1b[{s}m█\x1b[0m", .{color_map[color_index].ansiCode()});
+            }
+            
+            try self.stdout.print("│\n", .{});
+        }
+        
+        try self.stdout.print("└", .{});
+        for (0..data[0].len) |_| {
+            try self.stdout.print("─", .{});
+        }
+        try self.stdout.print("┘\n", .{});
+        
+        // Add some labels for context
+        try self.print("Min: ", .white, .normal);
+        try self.println(try std.fmt.allocPrint(std.heap.page_allocator, "{d:.2}", .{min_value}), .bright_white, .normal);
+        try self.print("Max: ", .white, .normal);
+        try self.println(try std.fmt.allocPrint(std.heap.page_allocator, "{d:.2}", .{max_value}), .bright_white, .normal);
         
         try self.stdout.print("\n", .{});
     }

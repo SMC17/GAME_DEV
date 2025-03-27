@@ -1,19 +1,47 @@
 const std = @import("std");
 const oil_field = @import("engine/oil_field.zig");
 const simulation = @import("engine/simulation.zig");
+const main_menu = @import("main_menu.zig");
+const player_data = @import("shared/player_data.zig");
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
     
+    // Launch the main menu with player data integration
+    var menu = try main_menu.MainMenu.init(allocator);
+    defer menu.deinit();
+    
+    try menu.run();
+}
+
+// This is the original simulation demo, kept as a reference
+pub fn runSimulationDemo(allocator: std.mem.Allocator) !void {
     var sim = try simulation.SimulationEngine.init(allocator);
     defer sim.deinit();
     
     // Create some oil fields
-    const small_field = oil_field.OilField.init(1000.0, 5.0);
-    const medium_field = oil_field.OilField.init(5000.0, 10.0);
-    const large_field = oil_field.OilField.init(10000.0, 15.0);
+    var small_field = try oil_field.OilField.init(
+        allocator,
+        1000.0, // capacity
+        5.0,    // extraction rate
+        1.0     // quality
+    );
+    
+    var medium_field = try oil_field.OilField.init(
+        allocator,
+        5000.0, // capacity
+        10.0,   // extraction rate
+        0.9     // quality
+    );
+    
+    var large_field = try oil_field.OilField.init(
+        allocator,
+        10000.0, // capacity
+        15.0,    // extraction rate
+        0.8      // quality
+    );
     
     try sim.addOilField(small_field);
     try sim.addOilField(medium_field);
@@ -43,6 +71,12 @@ pub fn main() !void {
     }
     
     try stdout.print("=== Simulation Complete ===\n", .{});
+    
+    // If we have player data, record an achievement for running the simulation
+    if (player_data.getGlobalPlayerData()) |data| {
+        try data.unlockAchievement("ran_simulation_demo");
+        _ = player_data.saveGlobalPlayerData() catch {};
+    }
 }
 
 // Helper function to create a range for iteration

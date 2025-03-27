@@ -55,6 +55,61 @@ pub fn main() !void {
         try ui.println(try std.fmt.allocPrint(allocator, "{s}", .{@tagName(sandbox.market_scenario)}), .bright_cyan, .bold);
         try ui.println(try std.fmt.allocPrint(allocator, "   {s}", .{sandbox.market_scenario.getDescription()}), .cyan, .italic);
         
+        // Display current weather
+        try ui.stdout.print("\n", .{});
+        try ui.println("Weather Conditions:", .bright_cyan, .bold);
+        try ui.print("Region: ", .white, .normal);
+        try ui.println(try std.fmt.allocPrint(allocator, "{s}", .{@tagName(sandbox.region_type)}), .bright_blue, .bold);
+        try ui.println(try std.fmt.allocPrint(allocator, "   {s}", .{sandbox.region_type.getDescription()}), .blue, .italic);
+        
+        try ui.print("Current Weather: ", .white, .normal);
+        
+        // Select color based on weather condition severity
+        const weather_color: terminal_ui.TextColor = switch (sandbox.weather_system.current_condition) {
+            .clear => .bright_green,
+            .cloudy => .bright_white,
+            .rainy => .bright_blue,
+            .stormy => .bright_magenta,
+            .blizzard => .bright_cyan,
+            .heatwave => .bright_red,
+        };
+        
+        try ui.println(try std.fmt.allocPrint(allocator, "{s}", .{@tagName(sandbox.weather_system.current_condition)}), weather_color, .bold);
+        try ui.println(try std.fmt.allocPrint(allocator, "   {s}", .{sandbox.weather_system.current_condition.getDescription()}), weather_color, .italic);
+        
+        // Display weather effects with status bars
+        const production_effect = sandbox.weather_system.getCurrentProductionMultiplier();
+        const cost_effect = sandbox.weather_system.getCurrentCostMultiplier();
+        const risk_effect = sandbox.weather_system.getCurrentIncidentRiskMultiplier();
+        
+        // Production effect status bar
+        const prod_color: terminal_ui.TextColor = if (production_effect < 0.8) .red else if (production_effect < 1.0) .yellow else .bright_green;
+        try ui.drawStatusBar("Production", try std.fmt.allocPrint(allocator, "{d:.1}%", .{production_effect * 100.0}), 20, '■', '□', production_effect, prod_color);
+        
+        // Cost effect status bar
+        const cost_color: terminal_ui.TextColor = if (cost_effect > 1.3) .red else if (cost_effect > 1.0) .yellow else .bright_green;
+        try ui.drawStatusBar("Costs", try std.fmt.allocPrint(allocator, "{d:.1}%", .{cost_effect * 100.0}), 20, '■', '□', cost_effect, cost_color);
+        
+        // Risk effect status bar
+        const risk_color: terminal_ui.TextColor = if (risk_effect > 1.5) .red else if (risk_effect > 1.0) .yellow else .bright_green;
+        try ui.drawStatusBar("Incident Risk", try std.fmt.allocPrint(allocator, "{d:.1}%", .{risk_effect * 100.0}), 20, '■', '□', risk_effect, risk_color);
+        
+        // Forecast preview
+        try ui.print("Forecast: ", .white, .normal);
+        for (sandbox.weather_system.forecast[0..3], 0..) |condition, i| {
+            const forecast_color: terminal_ui.TextColor = switch (condition) {
+                .clear => .bright_green,
+                .cloudy => .white,
+                .rainy => .bright_blue,
+                .stormy => .bright_magenta,
+                .blizzard => .bright_cyan,
+                .heatwave => .bright_red,
+            };
+            try ui.print(try std.fmt.allocPrint(allocator, "Day {d}: ", .{i + 1}), .white, .normal);
+            try ui.print(try std.fmt.allocPrint(allocator, "{s} ", .{@tagName(condition)}), forecast_color, .normal);
+        }
+        try ui.stdout.print("...\n", .{});
+        
         try ui.stdout.print("\n", .{});
         
         // Oil Fields
@@ -114,9 +169,12 @@ pub fn main() !void {
             "Add Oil Field",
             "Change Market Scenario",
             "Adjust Environmental Factors",
+            "Change Region Type",
+            "View Weather Forecast",
             "Change Time Scale",
             "Toggle Auto-Run",
             "Generate Report",
+            "Visualize Data",
             "Quit",
         };
         
@@ -167,10 +225,16 @@ pub fn main() !void {
                         3 => { // Adjust Environmental Factors
                             try adjustEnvironmentalFactorsMenu(&ui, allocator, &sandbox);
                         },
-                        4 => { // Change Time Scale
+                        4 => { // Change Region Type
+                            try changeRegionTypeMenu(&ui, &sandbox);
+                        },
+                        5 => { // View Weather Forecast
+                            try viewWeatherForecastMenu(&ui, allocator, &sandbox);
+                        },
+                        6 => { // Change Time Scale
                             try changeTimeScaleMenu(&ui, allocator, &sandbox);
                         },
-                        5 => { // Toggle Auto-Run
+                        7 => { // Toggle Auto-Run
                             sandbox.auto_run = !sandbox.auto_run;
                             if (sandbox.auto_run) {
                                 try ui.println("Auto-run enabled. Simulation will advance automatically.", .bright_green, .bold);
@@ -181,10 +245,13 @@ pub fn main() !void {
                             try ui.stdout.print("Press Enter to continue...", .{});
                             _ = try ui.stdout.context.reader().readUntilDelimiterOrEof(buf[0..], '\n');
                         },
-                        6 => { // Generate Report
+                        8 => { // Generate Report
                             try generateReportMenu(&ui, allocator, &sandbox);
                         },
-                        7 => { // Quit
+                        9 => { // Visualize Data
+                            try visualizeDataMenu(&ui, allocator, &sandbox);
+                        },
+                        10 => { // Quit
                             running = false;
                         },
                         else => {},
@@ -355,6 +422,162 @@ fn adjustEnvironmentalFactorsMenu(ui: *terminal_ui.TerminalUI, allocator: std.me
     _ = try ui.stdout.context.reader().readUntilDelimiterOrEof(buf[0..], '\n');
 }
 
+/// Menu for changing region type
+fn changeRegionTypeMenu(ui: *terminal_ui.TerminalUI, sandbox: *sandbox_mode.SandboxMode) !void {
+    try ui.clear();
+    try ui.drawTitle("Change Region Type");
+    
+    const regions = [_]sandbox_mode.RegionType{
+        .temperate,
+        .desert,
+        .tropical,
+        .arctic,
+        .offshore,
+    };
+    
+    try ui.println("Select a region type:", .bright_cyan, .bold);
+    
+    for (regions, 0..) |region, i| {
+        try ui.print(try std.fmt.bufPrint(&[_]u8{0} ** 10, "{d}. ", .{i + 1}), .bright_white, .bold);
+        try ui.println(try std.fmt.bufPrint(&[_]u8{0} ** 100, "{s}", .{@tagName(region)}), .bright_blue, .bold);
+        try ui.println(try std.fmt.bufPrint(&[_]u8{0} ** 200, "   {s}", .{region.getDescription()}), .white, .normal);
+        
+        // Show typical weather patterns
+        var weather_patterns = [_][]const u8{"clear", "cloudy", "rainy", "stormy", "blizzard", "heatwave"};
+        var probs = region.getWeatherProbabilities();
+        
+        try ui.print(try std.fmt.bufPrint(&[_]u8{0} ** 200, "   Weather Patterns: "), .cyan, .italic);
+        for (weather_patterns, 0..) |pattern, w_idx| {
+            if (probs[w_idx] > 0.0) {
+                const weather_color: terminal_ui.TextColor = switch (w_idx) {
+                    0 => .bright_green,
+                    1 => .white,
+                    2 => .bright_blue, 
+                    3 => .bright_magenta,
+                    4 => .bright_cyan,
+                    5 => .bright_red,
+                    else => .white,
+                };
+                
+                try ui.print(try std.fmt.bufPrint(&[_]u8{0} ** 50, "{s}", .{pattern}), weather_color, .normal);
+                try ui.print(try std.fmt.bufPrint(&[_]u8{0} ** 20, " ({d:.0}%) ", .{probs[w_idx] * 100.0}), .cyan, .normal);
+            }
+        }
+        try ui.stdout.print("\n\n", .{});
+    }
+    
+    try ui.stdout.print("\nEnter your choice (1-5): ", .{});
+    
+    var buf: [100]u8 = undefined;
+    if (try ui.stdout.context.reader().readUntilDelimiterOrEof(buf[0..], '\n')) |input| {
+        const choice = std.fmt.parseInt(usize, input, 10) catch 1;
+        if (choice > 0 and choice <= regions.len) {
+            sandbox.setRegion(regions[choice - 1]);
+            
+            try ui.println(try std.fmt.bufPrint(&[_]u8{0} ** 200, "\nRegion changed to {s}.", 
+                .{@tagName(regions[choice - 1])}), .bright_green, .bold);
+            try ui.println("Weather patterns have been updated for the new region.", .bright_green, .normal);
+        }
+    }
+    
+    try ui.stdout.print("\nPress Enter to continue...", .{});
+    _ = try ui.stdout.context.reader().readUntilDelimiterOrEof(buf[0..], '\n');
+}
+
+/// Menu for viewing detailed weather forecast
+fn viewWeatherForecastMenu(ui: *terminal_ui.TerminalUI, allocator: std.mem.Allocator, sandbox: *sandbox_mode.SandboxMode) !void {
+    try ui.clear();
+    try ui.drawTitle("Weather Forecast");
+    
+    // Get the weather report
+    const weather_report = try sandbox.getWeatherReport();
+    defer allocator.free(weather_report);
+    
+    // Split the report into lines and display with proper formatting
+    var lines = std.mem.split(u8, weather_report, "\n");
+    while (lines.next()) |line| {
+        if (std.mem.startsWith(u8, line, "WEATHER REPORT")) {
+            // Header
+            try ui.println(line, .bright_cyan, .bold);
+        } else if (std.mem.startsWith(u8, line, "Current conditions:")) {
+            // Current weather
+            var parts = std.mem.split(u8, line, ":");
+            try ui.print(try std.fmt.allocPrint(allocator, "{s}:", .{parts.next().?}), .bright_white, .bold);
+            
+            if (parts.next()) |condition| {
+                const weather_color: terminal_ui.TextColor = 
+                    if (std.mem.indexOf(u8, condition, "clear") != null) .bright_green
+                    else if (std.mem.indexOf(u8, condition, "cloudy") != null) .white
+                    else if (std.mem.indexOf(u8, condition, "rainy") != null) .bright_blue
+                    else if (std.mem.indexOf(u8, condition, "stormy") != null) .bright_magenta
+                    else if (std.mem.indexOf(u8, condition, "blizzard") != null) .bright_cyan
+                    else if (std.mem.indexOf(u8, condition, "heatwave") != null) .bright_red
+                    else .white;
+                
+                try ui.println(try std.fmt.allocPrint(allocator, "{s}", .{condition}), weather_color, .bold);
+            }
+        } else if (std.mem.startsWith(u8, line, "  Day")) {
+            // Forecast day
+            var parts = std.mem.split(u8, line, ":");
+            try ui.print(try std.fmt.allocPrint(allocator, "{s}:", .{parts.next().?}), .white, .normal);
+            
+            if (parts.next()) |condition| {
+                const weather_color: terminal_ui.TextColor = 
+                    if (std.mem.indexOf(u8, condition, "clear") != null) .bright_green
+                    else if (std.mem.indexOf(u8, condition, "cloudy") != null) .white
+                    else if (std.mem.indexOf(u8, condition, "rainy") != null) .bright_blue
+                    else if (std.mem.indexOf(u8, condition, "stormy") != null) .bright_magenta
+                    else if (std.mem.indexOf(u8, condition, "blizzard") != null) .bright_cyan
+                    else if (std.mem.indexOf(u8, condition, "heatwave") != null) .bright_red
+                    else .white;
+                
+                try ui.println(try std.fmt.allocPrint(allocator, "{s}", .{condition}), weather_color, .normal);
+            }
+        } else if (std.mem.startsWith(u8, line, "  Production:")) {
+            var parts = std.mem.split(u8, line, ":");
+            try ui.print(try std.fmt.allocPrint(allocator, "{s}:", .{parts.next().?}), .white, .normal);
+            
+            if (parts.next()) |value| {
+                const parsed = std.fmt.parseFloat(f32, value) catch 100.0;
+                const color: terminal_ui.TextColor = if (parsed < 80.0) .red else if (parsed < 100.0) .yellow else .bright_green;
+                try ui.println(try std.fmt.allocPrint(allocator, "{s}", .{value}), color, .normal);
+            }
+        } else if (std.mem.startsWith(u8, line, "  Operational costs:")) {
+            var parts = std.mem.split(u8, line, ":");
+            try ui.print(try std.fmt.allocPrint(allocator, "{s}:", .{parts.next().?}), .white, .normal);
+            
+            if (parts.next()) |value| {
+                const parsed = std.fmt.parseFloat(f32, value) catch 100.0;
+                const color: terminal_ui.TextColor = if (parsed > 120.0) .red else if (parsed > 100.0) .yellow else .bright_green;
+                try ui.println(try std.fmt.allocPrint(allocator, "{s}", .{value}), color, .normal);
+            }
+        } else if (std.mem.startsWith(u8, line, "  Incident risk:")) {
+            var parts = std.mem.split(u8, line, ":");
+            try ui.print(try std.fmt.allocPrint(allocator, "{s}:", .{parts.next().?}), .white, .normal);
+            
+            if (parts.next()) |value| {
+                const parsed = std.fmt.parseFloat(f32, value) catch 100.0;
+                const color: terminal_ui.TextColor = if (parsed > 150.0) .red else if (parsed > 100.0) .yellow else .bright_green;
+                try ui.println(try std.fmt.allocPrint(allocator, "{s}", .{value}), color, .normal);
+            }
+        } else if (std.mem.startsWith(u8, line, "7-Day Forecast:")) {
+            try ui.stdout.print("\n", .{});
+            try ui.println(line, .bright_cyan, .bold);
+        } else {
+            try ui.println(line, .white, .normal);
+        }
+    }
+    
+    try ui.stdout.print("\nWeather can significantly impact your oil operations.\n", .{});
+    try ui.println("Clear weather boosts production, while storms and blizzards reduce it dramatically.", .bright_yellow, .normal);
+    try ui.println("Severe weather also increases operational costs and the risk of disasters.", .bright_yellow, .normal);
+    try ui.println("Consider suspending operations during extreme weather conditions.", .bright_green, .italic);
+    
+    try ui.stdout.print("\nPress Enter to continue...", .{});
+    var buf: [100]u8 = undefined;
+    _ = try ui.stdout.context.reader().readUntilDelimiterOrEof(buf[0..], '\n');
+}
+
 /// Menu for changing time scale
 fn changeTimeScaleMenu(ui: *terminal_ui.TerminalUI, allocator: std.mem.Allocator, sandbox: *sandbox_mode.SandboxMode) !void {
     try ui.clear();
@@ -431,4 +654,272 @@ fn generateReportMenu(ui: *terminal_ui.TerminalUI, allocator: std.mem.Allocator,
     try ui.stdout.print("\nPress Enter to continue...", .{});
     var buf: [100]u8 = undefined;
     _ = try ui.stdout.context.reader().readUntilDelimiterOrEof(buf[0..], '\n');
+}
+
+/// Menu for visualizing price and production history
+fn visualizeDataMenu(ui: *terminal_ui.TerminalUI, allocator: std.mem.Allocator, sandbox: *sandbox_mode.SandboxMode) !void {
+    try ui.clear();
+    try ui.drawTitle("Data Visualization");
+    
+    // Check if we have enough data points
+    if (sandbox.price_history.items.len == 0 or sandbox.production_history.items.len == 0) {
+        try ui.println("Not enough data to visualize. Run the simulation longer to collect data.", .yellow, .italic);
+        try ui.stdout.print("\nPress Enter to continue...", .{});
+        var buf: [100]u8 = undefined;
+        _ = try ui.stdout.context.reader().readUntilDelimiterOrEof(buf[0..], '\n');
+        return;
+    }
+    
+    // Determine what to visualize
+    const options = [_][]const u8{
+        "Oil Price History",
+        "Production Rate History",
+        "Total Extraction History",
+        "Return to Main Menu",
+    };
+    
+    var selected_option: usize = 0;
+    var running = true;
+    
+    while (running) {
+        try ui.clear();
+        try ui.drawTitle("Data Visualization");
+        
+        try ui.println("Select data to visualize:", .bright_cyan, .bold);
+        try ui.drawMenu("Options:", &options, selected_option);
+        
+        try ui.stdout.print("Enter command (n=next, p=previous, s=select, q=quit): ", .{});
+        
+        var buf: [100]u8 = undefined;
+        if (try ui.stdout.context.reader().readUntilDelimiterOrEof(buf[0..], '\n')) |input| {
+            if (input.len == 0) {
+                continue;
+            }
+            
+            switch (input[0]) {
+                'n', 'N' => {
+                    // Navigate to next menu item
+                    selected_option = (selected_option + 1) % options.len;
+                },
+                'p', 'P' => {
+                    // Navigate to previous menu item
+                    if (selected_option == 0) {
+                        selected_option = options.len - 1;
+                    } else {
+                        selected_option -= 1;
+                    }
+                },
+                's', 'S', '\r', '\n' => {
+                    // Process selected action
+                    switch (selected_option) {
+                        0 => { // Oil Price History
+                            try visualizePriceHistory(ui, allocator, sandbox);
+                        },
+                        1 => { // Production Rate History
+                            try visualizeProductionRate(ui, allocator, sandbox);
+                        },
+                        2 => { // Total Extraction History
+                            try visualizeTotalExtraction(ui, allocator, sandbox);
+                        },
+                        3 => { // Return to Main Menu
+                            running = false;
+                        },
+                        else => {},
+                    }
+                },
+                'q', 'Q' => {
+                    running = false;
+                },
+                else => {},
+            }
+        }
+    }
+}
+
+/// Visualize oil price history
+fn visualizePriceHistory(ui: *terminal_ui.TerminalUI, allocator: std.mem.Allocator, sandbox: *sandbox_mode.SandboxMode) !void {
+    try ui.clear();
+    try ui.drawTitle("Oil Price History");
+    
+    // Extract days and prices for visualization
+    var days = try std.ArrayList([]const u8).initCapacity(allocator, sandbox.price_history.items.len);
+    defer days.deinit();
+    
+    var prices = try std.ArrayList(f32).initCapacity(allocator, sandbox.price_history.items.len);
+    defer prices.deinit();
+    
+    for (sandbox.price_history.items) |point| {
+        const day_str = try std.fmt.allocPrint(allocator, "Day {d}", .{point.day});
+        try days.append(day_str);
+        try prices.append(point.price);
+    }
+    
+    // Draw line chart
+    try ui.drawLineChart("Oil Price Over Time", prices.items, 60, 15, .bright_green);
+    
+    // Draw bar chart if we have fewer than 20 data points
+    if (prices.items.len <= 20) {
+        try ui.drawBarChart("Oil Price by Day", days.items, prices.items, 40, .bright_green);
+    }
+    
+    // Statistics
+    var min_price: f32 = prices.items[0];
+    var max_price: f32 = prices.items[0];
+    var sum_price: f32 = 0;
+    
+    for (prices.items) |price| {
+        min_price = @min(min_price, price);
+        max_price = @max(max_price, price);
+        sum_price += price;
+    }
+    
+    const avg_price = sum_price / @as(f32, @floatFromInt(prices.items.len));
+    
+    try ui.println("Price Statistics:", .bright_cyan, .bold);
+    try ui.print("Minimum Price: ", .white, .normal);
+    try ui.println(try std.fmt.allocPrint(allocator, "${d:.2}", .{min_price}), .bright_white, .normal);
+    
+    try ui.print("Maximum Price: ", .white, .normal);
+    try ui.println(try std.fmt.allocPrint(allocator, "${d:.2}", .{max_price}), .bright_white, .normal);
+    
+    try ui.print("Average Price: ", .white, .normal);
+    try ui.println(try std.fmt.allocPrint(allocator, "${d:.2}", .{avg_price}), .bright_white, .normal);
+    
+    try ui.print("Volatility: ", .white, .normal);
+    const volatility = (max_price - min_price) / avg_price * 100.0;
+    const volatility_color: terminal_ui.TextColor = if (volatility > 50.0) .bright_red else if (volatility > 20.0) .yellow else .bright_green;
+    try ui.println(try std.fmt.allocPrint(allocator, "{d:.1}%", .{volatility}), volatility_color, .normal);
+    
+    try ui.stdout.print("\nPress Enter to continue...", .{});
+    var buf: [100]u8 = undefined;
+    _ = try ui.stdout.context.reader().readUntilDelimiterOrEof(buf[0..], '\n');
+    
+    // Free day strings
+    for (days.items) |day_str| {
+        allocator.free(day_str);
+    }
+}
+
+/// Visualize production rate history
+fn visualizeProductionRate(ui: *terminal_ui.TerminalUI, allocator: std.mem.Allocator, sandbox: *sandbox_mode.SandboxMode) !void {
+    try ui.clear();
+    try ui.drawTitle("Production Rate History");
+    
+    // Extract days and production rates for visualization
+    var days = try std.ArrayList([]const u8).initCapacity(allocator, sandbox.production_history.items.len);
+    defer days.deinit();
+    
+    var rates = try std.ArrayList(f32).initCapacity(allocator, sandbox.production_history.items.len);
+    defer rates.deinit();
+    
+    for (sandbox.production_history.items) |point| {
+        const day_str = try std.fmt.allocPrint(allocator, "Day {d}", .{point.day});
+        try days.append(day_str);
+        try rates.append(point.production_rate);
+    }
+    
+    // Draw line chart
+    try ui.drawLineChart("Production Rate Over Time", rates.items, 60, 15, .bright_cyan);
+    
+    // Draw bar chart if we have fewer than 20 data points
+    if (rates.items.len <= 20) {
+        try ui.drawBarChart("Production Rate by Day", days.items, rates.items, 40, .bright_cyan);
+    }
+    
+    // Statistics
+    var min_rate: f32 = rates.items[0];
+    var max_rate: f32 = rates.items[0];
+    var sum_rate: f32 = 0;
+    
+    for (rates.items) |rate| {
+        min_rate = @min(min_rate, rate);
+        max_rate = @max(max_rate, rate);
+        sum_rate += rate;
+    }
+    
+    const avg_rate = sum_rate / @as(f32, @floatFromInt(rates.items.len));
+    
+    try ui.println("Production Statistics:", .bright_cyan, .bold);
+    try ui.print("Minimum Rate: ", .white, .normal);
+    try ui.println(try std.fmt.allocPrint(allocator, "{d:.2} barrels/day", .{min_rate}), .bright_white, .normal);
+    
+    try ui.print("Maximum Rate: ", .white, .normal);
+    try ui.println(try std.fmt.allocPrint(allocator, "{d:.2} barrels/day", .{max_rate}), .bright_white, .normal);
+    
+    try ui.print("Average Rate: ", .white, .normal);
+    try ui.println(try std.fmt.allocPrint(allocator, "{d:.2} barrels/day", .{avg_rate}), .bright_white, .normal);
+    
+    try ui.print("Production Change: ", .white, .normal);
+    if (rates.items.len >= 2) {
+        const first_rate = rates.items[0];
+        const last_rate = rates.items[rates.items.len - 1];
+        const change_pct = (last_rate - first_rate) / first_rate * 100.0;
+        const change_color: terminal_ui.TextColor = if (change_pct < -20.0) .bright_red else if (change_pct < 0) .yellow else .bright_green;
+        try ui.println(try std.fmt.allocPrint(allocator, "{d:.1}%", .{change_pct}), change_color, .normal);
+    } else {
+        try ui.println("N/A (not enough data)", .bright_white, .normal);
+    }
+    
+    try ui.stdout.print("\nPress Enter to continue...", .{});
+    var buf: [100]u8 = undefined;
+    _ = try ui.stdout.context.reader().readUntilDelimiterOrEof(buf[0..], '\n');
+    
+    // Free day strings
+    for (days.items) |day_str| {
+        allocator.free(day_str);
+    }
+}
+
+/// Visualize total extraction history
+fn visualizeTotalExtraction(ui: *terminal_ui.TerminalUI, allocator: std.mem.Allocator, sandbox: *sandbox_mode.SandboxMode) !void {
+    try ui.clear();
+    try ui.drawTitle("Total Extraction History");
+    
+    // Extract days and total extraction for visualization
+    var days = try std.ArrayList([]const u8).initCapacity(allocator, sandbox.production_history.items.len);
+    defer days.deinit();
+    
+    var extractions = try std.ArrayList(f32).initCapacity(allocator, sandbox.production_history.items.len);
+    defer extractions.deinit();
+    
+    for (sandbox.production_history.items) |point| {
+        const day_str = try std.fmt.allocPrint(allocator, "Day {d}", .{point.day});
+        try days.append(day_str);
+        try extractions.append(point.total_extracted);
+    }
+    
+    // Draw line chart
+    try ui.drawLineChart("Total Oil Extracted Over Time", extractions.items, 60, 15, .bright_yellow);
+    
+    // Statistics
+    const first_extraction = extractions.items[0];
+    const last_extraction = extractions.items[extractions.items.len - 1];
+    const total_days = sandbox.production_history.items[sandbox.production_history.items.len - 1].day - 
+                        sandbox.production_history.items[0].day;
+    
+    const avg_daily_extraction = if (total_days > 0) 
+        (last_extraction - first_extraction) / @as(f32, @floatFromInt(total_days))
+        else 0;
+    
+    try ui.println("Extraction Statistics:", .bright_cyan, .bold);
+    try ui.print("Starting Extraction: ", .white, .normal);
+    try ui.println(try std.fmt.allocPrint(allocator, "{d:.2} barrels", .{first_extraction}), .bright_white, .normal);
+    
+    try ui.print("Current Extraction: ", .white, .normal);
+    try ui.println(try std.fmt.allocPrint(allocator, "{d:.2} barrels", .{last_extraction}), .bright_white, .normal);
+    
+    try ui.print("Total Extracted: ", .white, .normal);
+    try ui.println(try std.fmt.allocPrint(allocator, "{d:.2} barrels", .{last_extraction - first_extraction}), .bright_yellow, .bold);
+    
+    try ui.print("Average Daily Extraction: ", .white, .normal);
+    try ui.println(try std.fmt.allocPrint(allocator, "{d:.2} barrels/day", .{avg_daily_extraction}), .bright_white, .normal);
+    
+    try ui.stdout.print("\nPress Enter to continue...", .{});
+    var buf: [100]u8 = undefined;
+    _ = try ui.stdout.context.reader().readUntilDelimiterOrEof(buf[0..], '\n');
+    
+    // Free day strings
+    for (days.items) |day_str| {
+        allocator.free(day_str);
+    }
 } 

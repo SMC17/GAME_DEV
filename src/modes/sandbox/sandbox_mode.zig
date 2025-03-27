@@ -1,6 +1,186 @@
 const std = @import("std");
 const base_oil_field = @import("../../engine/oil_field.zig");
 const base_simulation = @import("../../engine/simulation.zig");
+const player_data = @import("../../shared/player_data.zig");
+
+/// Weather conditions that can affect oil operations
+pub const WeatherCondition = enum {
+    clear,
+    cloudy,
+    rainy,
+    stormy,
+    blizzard,
+    heatwave,
+    
+    /// Get description of the weather condition
+    pub fn getDescription(self: WeatherCondition) []const u8 {
+        return switch (self) {
+            .clear => "Clear skies with ideal working conditions",
+            .cloudy => "Overcast but operations running normally",
+            .rainy => "Rainy conditions causing minor delays",
+            .stormy => "Storm conditions limiting operations",
+            .blizzard => "Blizzard conditions severely impacting operations",
+            .heatwave => "Extreme heat causing equipment strain and worker fatigue",
+        };
+    }
+    
+    /// Get production multiplier based on weather condition
+    pub fn getProductionMultiplier(self: WeatherCondition) f32 {
+        return switch (self) {
+            .clear => 1.1,     // Slight bonus in good weather
+            .cloudy => 1.0,    // No effect
+            .rainy => 0.85,    // 15% reduction
+            .stormy => 0.6,    // 40% reduction
+            .blizzard => 0.3,  // 70% reduction
+            .heatwave => 0.75, // 25% reduction
+        };
+    }
+    
+    /// Get operational cost multiplier
+    pub fn getOperationalCostMultiplier(self: WeatherCondition) f32 {
+        return switch (self) {
+            .clear => 0.95,    // 5% cost reduction
+            .cloudy => 1.0,    // No effect
+            .rainy => 1.1,     // 10% increase
+            .stormy => 1.3,    // 30% increase
+            .blizzard => 1.5,  // 50% increase
+            .heatwave => 1.2,  // 20% increase
+        };
+    }
+    
+    /// Get risk of incidents (affects disaster chance)
+    pub fn getIncidentRiskMultiplier(self: WeatherCondition) f32 {
+        return switch (self) {
+            .clear => 0.8,     // 20% less incidents
+            .cloudy => 1.0,    // No effect
+            .rainy => 1.2,     // 20% more incidents
+            .stormy => 2.0,    // Double incidents
+            .blizzard => 2.5,  // 150% more incidents
+            .heatwave => 1.5,  // 50% more incidents
+        };
+    }
+};
+
+/// Region type that affects weather patterns
+pub const RegionType = enum {
+    temperate,
+    desert,
+    tropical,
+    arctic,
+    offshore,
+    
+    /// Get description of the region
+    pub fn getDescription(self: RegionType) []const u8 {
+        return switch (self) {
+            .temperate => "Moderate climate with seasonal changes",
+            .desert => "Hot, dry climate with extreme temperature variations",
+            .tropical => "Hot, humid climate with frequent rainfall",
+            .arctic => "Cold climate with harsh winters",
+            .offshore => "Marine environment subject to sea conditions",
+        };
+    }
+    
+    /// Get probability distribution for weather conditions based on region
+    pub fn getWeatherProbabilities(self: RegionType) [6]f32 {
+        return switch (self) {
+            .temperate => [6]f32{ 0.5, 0.25, 0.15, 0.07, 0.01, 0.02 }, // More clear days
+            .desert => [6]f32{ 0.7, 0.15, 0.03, 0.02, 0.0, 0.1 },      // Mostly clear, some heatwaves
+            .tropical => [6]f32{ 0.25, 0.2, 0.3, 0.2, 0.0, 0.05 },     // More rain and storms
+            .arctic => [6]f32{ 0.3, 0.2, 0.1, 0.15, 0.25, 0.0 },       // More blizzards
+            .offshore => [6]f32{ 0.3, 0.25, 0.2, 0.2, 0.05, 0.0 },     // More storms
+        };
+    }
+    
+    /// Generate weather condition based on day and region
+    pub fn generateWeather(self: RegionType, day: u32) WeatherCondition {
+        // Use day as pseudo-random source for deterministic weather
+        var probs = self.getWeatherProbabilities();
+        var day_value = @mod(day * day, 1000) / 1000.0;
+        
+        // Convert day value to weather condition based on probability thresholds
+        var cumulative: f32 = 0.0;
+        for (probs, 0..) |prob, i| {
+            cumulative += prob;
+            if (day_value < cumulative) {
+                return @enumFromInt(i);
+            }
+        }
+        return .clear; // Default to clear if something goes wrong
+    }
+};
+
+/// Weather system for sandbox mode
+pub const WeatherSystem = struct {
+    region_type: RegionType,
+    current_condition: WeatherCondition,
+    forecast: [7]WeatherCondition, // Weather for next 7 days
+    
+    /// Initialize a new weather system
+    pub fn init(region: RegionType, start_day: u32) WeatherSystem {
+        var system = WeatherSystem{
+            .region_type = region,
+            .current_condition = region.generateWeather(start_day),
+            .forecast = undefined,
+        };
+        
+        // Generate forecast for next 7 days
+        for (0..7) |i| {
+            system.forecast[i] = region.generateWeather(start_day + @as(u32, @intCast(i)) + 1);
+        }
+        
+        return system;
+    }
+    
+    /// Update weather for a new day
+    pub fn updateForDay(self: *WeatherSystem, day: u32) void {
+        self.current_condition = self.forecast[0];
+        
+        // Shift forecast
+        for (1..7) |i| {
+            self.forecast[i-1] = self.forecast[i];
+        }
+        
+        // Generate new weather for last forecast day
+        self.forecast[6] = self.region_type.generateWeather(day + 7);
+    }
+    
+    /// Get the current production multiplier
+    pub fn getCurrentProductionMultiplier(self: WeatherSystem) f32 {
+        return self.current_condition.getProductionMultiplier();
+    }
+    
+    /// Get the current cost multiplier
+    pub fn getCurrentCostMultiplier(self: WeatherSystem) f32 {
+        return self.current_condition.getOperationalCostMultiplier();
+    }
+    
+    /// Get the current incident risk multiplier
+    pub fn getCurrentIncidentRiskMultiplier(self: WeatherSystem) f32 {
+        return self.current_condition.getIncidentRiskMultiplier();
+    }
+    
+    /// Generate a weather report
+    pub fn generateReport(self: WeatherSystem, allocator: std.mem.Allocator) ![]const u8 {
+        var report = std.ArrayList(u8).init(allocator);
+        defer report.deinit();
+        
+        var writer = report.writer();
+        
+        try writer.print("WEATHER REPORT - {s} REGION\n", .{self.region_type.getDescription()});
+        try writer.print("Current conditions: {s}\n", .{@tagName(self.current_condition)});
+        try writer.print("  {s}\n", .{self.current_condition.getDescription()});
+        try writer.print("  Production: {d:.1}%\n", .{self.current_condition.getProductionMultiplier() * 100});
+        try writer.print("  Operational costs: {d:.1}%\n", .{self.current_condition.getOperationalCostMultiplier() * 100});
+        try writer.print("  Incident risk: {d:.1}%\n\n", .{self.current_condition.getIncidentRiskMultiplier() * 100});
+        
+        try writer.print("7-Day Forecast:\n", .{});
+        for (self.forecast, 0..) |condition, i| {
+            try writer.print("  Day {d}: {s}\n", .{i + 1, @tagName(condition)});
+        }
+        
+        return try report.toOwnedSlice();
+    }
+};
 
 /// Customizable oil field for sandbox mode
 pub const SandboxOilField = struct {
@@ -153,11 +333,23 @@ pub const SandboxMode = struct {
     disaster_history: std.ArrayList(DisasterEvent),
     price_history: std.ArrayList(PricePoint),
     production_history: std.ArrayList(ProductionPoint),
+    weather_system: WeatherSystem, // Added weather system
+    region_type: RegionType, // Added region type
+    player_bonuses: ?player_data.PlayerBonuses, // Character skills and other bonuses
     allocator: std.mem.Allocator,
     
     /// Initialize a new sandbox mode
     pub fn init(allocator: std.mem.Allocator) !SandboxMode {
         var simulation = try base_simulation.SimulationEngine.init(allocator);
+        
+        // Default to temperate region
+        const region = RegionType.temperate;
+        
+        // Get player bonuses if available
+        var bonuses: ?player_data.PlayerBonuses = null;
+        if (player_data.getGlobalPlayerData()) |data| {
+            bonuses = data.generateBonuses();
+        }
         
         return SandboxMode{
             .oil_fields = std.ArrayList(SandboxOilField).init(allocator),
@@ -170,15 +362,41 @@ pub const SandboxMode = struct {
             .disaster_history = std.ArrayList(DisasterEvent).init(allocator),
             .price_history = std.ArrayList(PricePoint).init(allocator),
             .production_history = std.ArrayList(ProductionPoint).init(allocator),
+            .weather_system = WeatherSystem.init(region, 1),
+            .region_type = region,
+            .player_bonuses = bonuses,
             .allocator = allocator,
         };
     }
     
+    /// Set the region type
+    pub fn setRegion(self: *SandboxMode, region: RegionType) void {
+        // Check if region is unlocked via player progression
+        if (player_data.getGlobalPlayerData()) |data| {
+            const region_name = @tagName(region);
+            if (!data.isRegionUnlocked(region_name)) {
+                // Region not unlocked yet
+                return;
+            }
+        }
+        
+        self.region_type = region;
+        self.weather_system = WeatherSystem.init(region, self.current_day);
+    }
+    
+    /// Get the current weather report
+    pub fn getWeatherReport(self: *SandboxMode) ![]const u8 {
+        return try self.weather_system.generateReport(self.allocator);
+    }
+    
     /// Clean up resources
     pub fn deinit(self: *SandboxMode) void {
-        for (self.oil_fields.items) |*field| {
-            field.deinit(self.allocator);
+        for (self.oil_fields.items) |field| {
+            if (field.custom_notes) |notes| {
+                self.allocator.free(notes);
+            }
         }
+        
         self.oil_fields.deinit();
         self.simulation.deinit();
         self.disaster_history.deinit();
@@ -189,61 +407,188 @@ pub const SandboxMode = struct {
     /// Set the market scenario
     pub fn setMarketScenario(self: *SandboxMode, scenario: MarketScenario) void {
         self.market_scenario = scenario;
+        
+        // Apply the initial market conditions
         self.simulation.oil_price = scenario.getBasePrice();
     }
     
-    /// Create and add a new oil field
-    pub fn addOilField(self: *SandboxMode, name: []const u8, size: f32, extraction_rate: f32, quality: f32, depth: f32) !void {
-        var sandbox_field = try SandboxOilField.init(self.allocator, name, size, extraction_rate, quality, depth);
-        sandbox_field.discovery_date = self.current_day;
+    /// Add a new oil field to the simulation
+    pub fn addOilField(self: *SandboxMode, name: []const u8, size: f32, rate: f32, quality: f32, depth_multiplier: f32) !void {
+        // Apply engineering skill bonus to extraction rate if available
+        var modified_rate = rate;
+        var modified_size = size;
+        
+        if (self.player_bonuses) |bonuses| {
+            modified_rate = bonuses.applyToExtractionRate(rate);
+            
+            // Exploration skill increases field size discovery
+            if (bonuses.discovery_chance_bonus > 0) {
+                const size_bonus = 1.0 + (bonuses.discovery_chance_bonus * 0.5);
+                modified_size = size * size_bonus;
+            }
+        }
+        
+        var field = try base_oil_field.OilField.init(
+            self.allocator,
+            modified_size,
+            modified_rate,
+            quality
+        );
+        
+        var sandbox_field = SandboxOilField{
+            .base = field,
+            .custom_name = try self.allocator.dupe(u8, name),
+            .discovery_date = self.current_day,
+            .depth_multiplier = depth_multiplier,
+            .custom_notes = null,
+        };
         
         try self.oil_fields.append(sandbox_field);
-        try self.simulation.addOilField(sandbox_field.base);
-    }
-    
-    /// Update oil price based on market scenario and day
-    fn updateOilPrice(self: *SandboxMode) void {
-        const base_price = self.market_scenario.getBasePrice();
-        const volatility = self.market_scenario.getVolatility();
+        try self.simulation.addOilField(field);
         
-        // Use day as a simple pseudorandom source
-        const day_sin = @sin(@as(f32, @floatFromInt(self.current_day)) * 0.1);
-        const day_cos = @cos(@as(f32, @floatFromInt(self.current_day)) * 0.05);
-        const random_factor = (day_sin + day_cos) * volatility;
-        
-        self.simulation.oil_price = base_price * (1.0 + random_factor);
-        
-        // Record price history (every 10 days to save memory)
-        if (self.current_day % 10 == 0) {
-            try self.price_history.append(PricePoint{
-                .day = self.current_day,
-                .price = self.simulation.oil_price,
-            });
+        // Record largest field size for achievements/progression
+        if (player_data.getGlobalPlayerData()) |data| {
+            if (modified_size > data.largest_oilfield_size) {
+                data.largest_oilfield_size = modified_size;
+                
+                // Try to save data
+                _ = player_data.saveGlobalPlayerData() catch {};
+            }
         }
     }
     
-    /// Check for and handle environmental disasters
-    fn checkEnvironmentalDisasters(self: *SandboxMode) !void {
-        if (self.environmental_factors.checkDisaster(self.current_day)) {
-            // Choose a random field for the disaster
-            if (self.oil_fields.items.len > 0) {
-                const field_index = @mod(self.current_day, self.oil_fields.items.len);
-                var field = &self.oil_fields.items[field_index];
+    /// Set notes for an oil field
+    pub fn setOilFieldNotes(self: *SandboxMode, index: usize, notes: []const u8) !void {
+        if (index >= self.oil_fields.items.len) {
+            return error.InvalidIndex;
+        }
+        
+        // Free existing notes if any
+        if (self.oil_fields.items[index].custom_notes) |existing| {
+            self.allocator.free(existing);
+        }
+        
+        // Set new notes
+        self.oil_fields.items[index].custom_notes = try self.allocator.dupe(u8, notes);
+    }
+    
+    /// Set environmental factors
+    pub fn setEnvironmentalFactors(self: *SandboxMode, disaster_chance: f32, regulatory_pressure: f32, public_opinion: f32) void {
+        self.environmental_factors = EnvironmentalFactors{
+            .disaster_chance = disaster_chance,
+            .regulatory_pressure = regulatory_pressure,
+            .public_opinion = public_opinion,
+        };
+    }
+    
+    /// Update the oil price based on market scenario
+    pub fn updateOilPrice(self: *SandboxMode) !void {
+        const base_price = self.market_scenario.getBasePrice();
+        const volatility = self.market_scenario.getVolatility();
+        
+        // Generate a random price fluctuation
+        var prng = std.rand.DefaultPrng.init(@intCast(self.current_day));
+        var rand = prng.random();
+        
+        // Normal distribution approximation
+        const u1 = rand.float(f32);
+        const u2 = rand.float(f32);
+        const z = @sqrt(-2.0 * @log(u1)) * @cos(2.0 * std.math.pi * u2);
+        const price_change = z * volatility * base_price;
+        
+        // Apply scenario-specific trends
+        var trend: f32 = 0.0;
+        
+        switch (self.market_scenario) {
+            .boom => trend = 0.002 * base_price, // Upward trend in a boom
+            .bust => trend = -0.002 * base_price, // Downward trend in a bust
+            .shortage => if (self.current_day % 50 == 0) {
+                trend = 0.05 * base_price; // Occasional price spikes in shortage
+            },
+            .oversupply => if (self.current_day % 30 == 0) {
+                trend = -0.05 * base_price; // Occasional price drops in oversupply
+            },
+            else => {}, // No trend for other scenarios
+        }
+        
+        // Calculate new price with limits to prevent negative or extreme values
+        var new_price = self.simulation.oil_price + price_change + trend;
+        new_price = std.math.max(new_price, base_price * 0.5);
+        new_price = std.math.min(new_price, base_price * 2.0);
+        
+        // Apply player negotiation skill bonus if available
+        if (self.player_bonuses) |bonuses| {
+            new_price = bonuses.applyToOilPrice(new_price);
+        }
+        
+        // Update price history every 10 days
+        if (self.current_day % 10 == 0) {
+            try self.price_history.append(PricePoint{
+                .day = self.current_day,
+                .price = new_price,
+            });
+        }
+        
+        // Set the new price in the simulation
+        self.simulation.oil_price = new_price;
+    }
+    
+    /// Check for environmental disasters
+    pub fn checkEnvironmentalDisasters(self: *SandboxMode) !void {
+        var disaster_chance = self.environmental_factors.disaster_chance;
+        
+        // Apply player environmental skill to reduce disaster risk
+        if (self.player_bonuses) |bonuses| {
+            disaster_chance = bonuses.applyToDisasterRisk(disaster_chance);
+        }
+        
+        // Higher regulatory pressure reduces disaster chance
+        disaster_chance *= (1.0 - (self.environmental_factors.regulatory_pressure * 0.5));
+        
+        // Basic random check for disaster
+        var prng = std.rand.DefaultPrng.init(@intCast(self.current_day));
+        var rand = prng.random();
+        
+        if (rand.float(f32) < disaster_chance) {
+            // A disaster has occurred
+            const field_index = rand.uintLessThan(usize, self.oil_fields.items.len);
+            
+            // Calculate cleanup cost based on field size and environmental factors
+            const field = self.oil_fields.items[field_index];
+            const field_size = field.base.max_capacity;
+            const base_cleanup_cost = field_size * 0.5 * field.depth_multiplier;
+            
+            // Higher public opinion means higher cleanup costs (more pressure to do it right)
+            const cleanup_multiplier = 1.0 + (self.environmental_factors.public_opinion * 0.5);
+            const cleanup_cost = base_cleanup_cost * cleanup_multiplier;
+            
+            // Apply management skill to reduce cleanup costs if available
+            var final_cleanup_cost = cleanup_cost;
+            if (self.player_bonuses) |bonuses| {
+                final_cleanup_cost = bonuses.applyToOperationalCosts(cleanup_cost);
+            }
+            
+            // Calculate reputation damage
+            const reputation_damage = (1.0 - self.environmental_factors.public_opinion) * 0.2;
+            
+            // Record the disaster
+            try self.disaster_history.append(DisasterEvent{
+                .day = self.current_day,
+                .field_index = field_index,
+                .field_name = field.custom_name,
+                .cleanup_cost = final_cleanup_cost,
+                .reputation_damage = reputation_damage,
+            });
+            
+            // Apply the financial impact
+            self.simulation.money -= final_cleanup_cost;
+            
+            // Update company reputation in player data
+            if (player_data.getGlobalPlayerData()) |data| {
+                data.company_reputation = std.math.max(0.0, data.company_reputation - (reputation_damage * 100.0));
                 
-                // Calculate impact
-                const cleanup_cost = self.environmental_factors.calculateCleanupCost(field.base.max_capacity);
-                const reputation_damage = self.environmental_factors.calculateReputationDamage();
-                
-                // Apply costs
-                self.simulation.money -= cleanup_cost;
-                
-                // Record the disaster
-                try self.disaster_history.append(DisasterEvent{
-                    .day = self.current_day,
-                    .field_name = field.custom_name,
-                    .cleanup_cost = cleanup_cost,
-                    .reputation_damage = reputation_damage,
-                });
+                // Try to save data
+                _ = player_data.saveGlobalPlayerData() catch {};
             }
         }
     }
@@ -267,25 +612,66 @@ pub const SandboxMode = struct {
         // Apply time scale
         var i: f32 = 0.0;
         while (i < self.time_scale) : (i += 1.0) {
+            // Update weather before simulating the day
+            self.weather_system.updateForDay(self.current_day);
+            
+            // Apply weather effects to simulation
+            const production_multiplier = self.weather_system.getCurrentProductionMultiplier();
+            const cost_multiplier = self.weather_system.getCurrentCostMultiplier();
+            const risk_multiplier = self.weather_system.getCurrentIncidentRiskMultiplier();
+            
+            // Temporarily modify extraction rates based on weather
+            for (self.simulation.oil_fields.items) |*field| {
+                field.extraction_rate *= production_multiplier;
+            }
+            
+            // Run simulation step
             try self.simulation.step(1.0);
+            
+            // Apply additional costs based on weather
+            var operational_costs = self.simulation.oil_fields.items.len * 10.0 * cost_multiplier;
+            
+            // Apply management efficiency bonus to operational costs if available
+            if (self.player_bonuses) |bonuses| {
+                operational_costs = bonuses.applyToOperationalCosts(operational_costs);
+            }
+            
+            self.simulation.money -= operational_costs;
+            
+            // Restore original extraction rates
+            for (self.simulation.oil_fields.items, 0..) |*field, idx| {
+                if (idx < self.oil_fields.items.len) {
+                    // Reset to the original extraction rate from our SandboxOilField
+                    field.extraction_rate = self.oil_fields.items[idx].base.extraction_rate;
+                }
+            }
+            
             self.current_day += 1;
             
             // Update price based on market conditions
             try self.updateOilPrice();
             
+            // Apply weather effect to disaster chance
+            const original_disaster_chance = self.environmental_factors.disaster_chance;
+            self.environmental_factors.disaster_chance *= risk_multiplier;
+            
             // Check for environmental disasters
             try self.checkEnvironmentalDisasters();
+            
+            // Restore original disaster chance
+            self.environmental_factors.disaster_chance = original_disaster_chance;
         }
-    }
-    
-    /// Set environmental factors
-    pub fn setEnvironmentalFactors(self: *SandboxMode, disaster_chance: f32, regulatory_pressure: f32, public_opinion: f32) void {
-        self.environmental_factors.disaster_chance = disaster_chance;
-        self.environmental_factors.regulatory_pressure = regulatory_pressure;
-        self.environmental_factors.public_opinion = public_opinion;
         
-        // Update cost multiplier based on regulatory pressure
-        const env_multiplier = self.environmental_factors.getOperationalCostMultiplier();
+        // Update player data with earnings
+        if (player_data.getGlobalPlayerData()) |data| {
+            if (self.simulation.money > 0) {
+                data.total_earnings += @as(f64, @floatCast(self.simulation.money * 0.01));
+                data.company_value = @as(f64, @floatCast(self.simulation.money)) * 1.5;
+                
+                // Try to save data
+                _ = player_data.saveGlobalPlayerData() catch {};
+            }
+        }
     }
     
     /// Generate a report of the current state
@@ -297,12 +683,32 @@ pub const SandboxMode = struct {
         
         try writer.print("=== Sandbox Simulation Report (Day {d}) ===\n\n", .{self.current_day});
         
-        // Financial summary
+        // Weather information
+        try writer.print("Weather Conditions:\n", .{});
+        try writer.print("  Region: {s}\n", .{@tagName(self.region_type)});
+        try writer.print("  Current: {s}\n", .{@tagName(self.weather_system.current_condition)});
+        try writer.print("  Effect on Production: {d:.1}%\n", .{self.weather_system.getCurrentProductionMultiplier() * 100});
+        try writer.print("  Effect on Costs: {d:.1}%\n", .{self.weather_system.getCurrentCostMultiplier() * 100});
+        try writer.print("  Effect on Incident Risk: {d:.1}%\n\n", .{self.weather_system.getCurrentIncidentRiskMultiplier() * 100});
+        
+        // Player bonuses section if available
+        if (self.player_bonuses) |bonuses| {
+            try writer.print("Player Bonuses:\n", .{});
+            try writer.print("  Extraction Rate: +{d:.1}%\n", .{bonuses.extraction_rate_bonus * 100});
+            try writer.print("  Discovery Chance: +{d:.1}%\n", .{bonuses.discovery_chance_bonus * 100});
+            try writer.print("  Oil Price Negotiation: {d:.1}%\n", .{bonuses.negotiation_price_bonus * 100});
+            try writer.print("  Disaster Risk Reduction: {d:.1}%\n", .{bonuses.disaster_risk_reduction * 100});
+            try writer.print("  Operational Efficiency: {d:.1}%\n", .{bonuses.management_efficiency_bonus * 100});
+            try writer.print("  Reputation Effect: {d:.1}%\n\n", .{bonuses.reputation_bonus * 100});
+        }
+        
+        // Existing financial summary code...
         try writer.print("Financial Summary:\n", .{});
         try writer.print("  Total Money: ${d:.2}\n", .{self.simulation.money});
         try writer.print("  Current Oil Price: ${d:.2} per barrel\n", .{self.simulation.oil_price});
         try writer.print("  Total Oil Extracted: {d:.2} barrels\n\n", .{self.simulation.total_extracted});
         
+        // Rest of the report remains the same...
         // Oil Fields
         try writer.print("Oil Fields ({d}):\n", .{self.oil_fields.items.len});
         for (self.oil_fields.items, 0..) |field, i| {
