@@ -162,11 +162,22 @@ pub fn build(b: *std.Build) void {
 
     const integration_test_step = b.step("test-integration", "Run integration tests");
     integration_test_step.dependOn(&integration_tests.step);
-    
-    // Run all tests (both unit and integration)
-    const all_tests_step = b.step("test-all", "Run all tests (unit and integration)");
+
+    // UI Tests
+    const ui_tests = b.addTest(.{
+        .root_source_file = b.path("tests/ui_tests.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const ui_test_step = b.step("test-ui", "Run UI component tests");
+    ui_test_step.dependOn(&ui_tests.step);
+
+    // Run all tests (unit, integration, and UI)
+    const all_tests_step = b.step("test-all", "Run all tests (unit, integration, and UI)");
     all_tests_step.dependOn(&main_tests.step);
     all_tests_step.dependOn(&integration_tests.step);
+    all_tests_step.dependOn(&ui_tests.step);
 
     // Benchmark executable
     const benchmark_exe = b.addExecutable(.{

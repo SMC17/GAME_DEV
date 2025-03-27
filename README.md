@@ -45,6 +45,16 @@ The game is developed in [Zig](https://ziglang.org/). To build and run:
 - `zig build run-campaign` - Run the campaign mode directly
 - `zig build run-arcade` - Run the arcade mode directly
 
+### Testing
+
+The project includes comprehensive test coverage:
+
+- `zig build test` - Run unit tests
+- `zig build test-integration` - Run integration tests between game modes
+- `zig build test-ui` - Run UI component tests
+- `zig build test-all` - Run all tests
+- `zig build benchmark` - Run performance benchmarks
+
 ## Project Structure
 
 ```

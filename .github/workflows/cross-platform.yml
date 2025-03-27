@@ -41,6 +41,10 @@ jobs:
         run: zig build test-integration
         continue-on-error: true  # Allow integration tests to fail on some platforms during development
 
+      - name: Run UI Tests
+        run: zig build test-ui
+        continue-on-error: true  # Allow UI tests to fail on some platforms during development
+
       - name: Verify Executables
         run: |
           ls -la ${{ matrix.output-dir }}

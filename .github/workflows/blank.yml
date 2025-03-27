@@ -46,6 +46,11 @@ jobs:
           zig build test-integration
           echo "Integration tests passed successfully!"
           
+      - name: Run UI Tests
+        run: |
+          zig build test-ui
+          echo "UI tests passed successfully!"
+          
       - name: Run All Tests
         run: |
           zig build test-all
