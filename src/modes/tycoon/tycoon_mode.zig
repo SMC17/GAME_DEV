@@ -123,6 +123,203 @@ pub const ResearchProject = struct {
     }
 };
 
+/// Corporate strategy that provides unique bonuses and abilities
+pub const CorporateStrategy = struct {
+    name: []const u8,
+    description: []const u8,
+    bonuses: []const []const u8,
+    price_modifier: f32, // How this strategy affects oil prices
+    production_modifier: f32, // How this strategy affects production
+    reputation_modifier: f32, // How this strategy affects reputation
+    tech_modifier: f32, // How this strategy affects technology advancement
+    market_event_frequency_modifier: f32, // How this strategy affects random event frequency
+    special_ability: SpecialAbility, // Unique ability that can be activated
+    cooldown_days: u32, // Days before special ability can be used again
+    current_cooldown: u32 = 0, // Current cooldown timer
+    
+    /// Get a color based on the strategy type
+    pub fn getColor(self: *const CorporateStrategy) terminal_ui.TextColor {
+        return switch (self.special_ability) {
+            .market_manipulation => .bright_red,
+            .technological_breakthrough => .bright_cyan,
+            .aggressive_acquisition => .bright_yellow,
+            .reputation_campaign => .bright_green,
+            .crisis_management => .bright_magenta,
+        };
+    }
+    
+    /// Special abilities that can be triggered by the player
+    pub const SpecialAbility = enum {
+        market_manipulation, // Temporarily influence market prices
+        technological_breakthrough, // Boost technology development
+        aggressive_acquisition, // Forcefully acquire competitor assets
+        reputation_campaign, // Launch PR campaign to improve reputation
+        crisis_management, // Reduce impact of negative events
+        
+        /// Get description of the special ability
+        pub fn getDescription(self: SpecialAbility) []const u8 {
+            return switch (self) {
+                .market_manipulation => "Manipulate oil prices by 25% in your favor for 5 days",
+                .technological_breakthrough => "Double technology advancement speed for 10 days",
+                .aggressive_acquisition => "Attempt hostile takeover of competitor assets",
+                .reputation_campaign => "Launch major PR campaign to improve reputation by 15%",
+                .crisis_management => "Reduce impact of all active negative events by 50%",
+            };
+        }
+        
+        /// Get the cooldown period for this ability in days
+        pub fn getCooldown(self: SpecialAbility) u32 {
+            return switch (self) {
+                .market_manipulation => 30,
+                .technological_breakthrough => 45,
+                .aggressive_acquisition => 60,
+                .reputation_campaign => 30,
+                .crisis_management => 20,
+            };
+        }
+    };
+    
+    /// Available company strategies
+    pub const strategies = struct {
+        pub const market_dominator = CorporateStrategy{
+            .name = "Market Dominator",
+            .description = "Focus on aggressive expansion and market control",
+            .bonuses = &[_][]const u8{
+                "Oil field acquisition costs reduced by 15%",
+                "Production capacity increased by 20%",
+                "Market share growth accelerated by 25%",
+                "Competitor acquisition chance increased by 30%",
+            },
+            .price_modifier = 0.9, // Lower prices to gain market share
+            .production_modifier = 1.2, // Higher production
+            .reputation_modifier = 0.8, // Lower reputation focus
+            .tech_modifier = 0.9, // Lower tech focus
+            .market_event_frequency_modifier = 1.2, // More market volatility
+            .special_ability = .aggressive_acquisition,
+            .cooldown_days = 60,
+        };
+        
+        pub const tech_innovator = CorporateStrategy{
+            .name = "Technological Innovator",
+            .description = "Lead the industry through advanced technology",
+            .bonuses = &[_][]const u8{
+                "Technology advancement speed increased by 40%",
+                "Research costs reduced by 25%",
+                "Production efficiency improved by 15%",
+                "Environmental impact reduced by 30%",
+            },
+            .price_modifier = 1.05, // Premium prices due to efficiency
+            .production_modifier = 0.9, // Lower initial production
+            .reputation_modifier = 1.1, // Higher reputation
+            .tech_modifier = 1.4, // Much higher tech focus
+            .market_event_frequency_modifier = 0.9, // Less affected by market
+            .special_ability = .technological_breakthrough,
+            .cooldown_days = 45,
+        };
+        
+        pub const market_manipulator = CorporateStrategy{
+            .name = "Market Manipulator",
+            .description = "Control the market through strategic manipulation",
+            .bonuses = &[_][]const u8{
+                "Oil price volatility works in your favor by 25%",
+                "Market events provide 20% stronger benefits",
+                "Strategic reserve allows withholding 30% production",
+                "Market intelligence provides advance warning of price changes",
+            },
+            .price_modifier = 1.1, // Higher prices through manipulation
+            .production_modifier = 1.0, // Standard production
+            .reputation_modifier = 0.7, // Much lower reputation
+            .tech_modifier = 1.0, // Standard tech
+            .market_event_frequency_modifier = 1.3, // Much more market volatility
+            .special_ability = .market_manipulation,
+            .cooldown_days = 30,
+        };
+        
+        pub const sustainable_developer = CorporateStrategy{
+            .name = "Sustainable Developer",
+            .description = "Build a sustainable and respected company",
+            .bonuses = &[_][]const u8{
+                "Reputation gain increased by 50%",
+                "Environmental events have 70% less impact",
+                "Technology focuses on sustainability, 25% more efficient",
+                "Competitor relationship bonus of 20%",
+            },
+            .price_modifier = 1.15, // Premium prices for ethical oil
+            .production_modifier = 0.8, // Lower production for sustainability
+            .reputation_modifier = 1.5, // Much higher reputation focus
+            .tech_modifier = 1.25, // Higher tech focus
+            .market_event_frequency_modifier = 0.7, // Less affected by market
+            .special_ability = .reputation_campaign,
+            .cooldown_days = 30,
+        };
+        
+        pub const crisis_expert = CorporateStrategy{
+            .name = "Crisis Expert",
+            .description = "Thrive in chaotic markets and crisis situations",
+            .bonuses = &[_][]const u8{
+                "Negative event impact reduced by 60%",
+                "Company adapts 40% faster to market changes",
+                "Field acquisition opportunities increase 30% during crises",
+                "Reputation recovers 50% faster from negative events",
+            },
+            .price_modifier = 1.0, // Standard prices
+            .production_modifier = 1.1, // Slightly higher production
+            .reputation_modifier = 1.2, // Higher reputation resilience
+            .tech_modifier = 1.1, // Slightly higher tech
+            .market_event_frequency_modifier = 0.5, // Much less affected by market
+            .special_ability = .crisis_management,
+            .cooldown_days = 20,
+        };
+    };
+    
+    /// Activate special ability
+    pub fn activateSpecialAbility(self: *CorporateStrategy, game: *TycoonMode) !bool {
+        if (self.current_cooldown > 0) {
+            return false; // Still on cooldown
+        }
+        
+        self.current_cooldown = self.cooldown_days;
+        
+        switch (self.special_ability) {
+            .market_manipulation => {
+                // Manipulate oil prices in player's favor
+                const direction = if (game.oil_price < game.base_oil_price) 1.25 else 0.75;
+                game.market.applyPriceManipulation(direction, 5);
+                return true;
+            },
+            .technological_breakthrough => {
+                // Double tech advancement speed for 10 days
+                game.tech_boost_days = 10;
+                game.tech_boost_multiplier = 2.0;
+                return true;
+            },
+            .aggressive_acquisition => {
+                // Attempt hostile takeover of competitor assets
+                return game.attemptHostileTakeover();
+            },
+            .reputation_campaign => {
+                // Launch PR campaign
+                game.company_reputation = @min(1.0, game.company_reputation + 0.15);
+                // Create positive news event
+                try game.market.addCustomEvent("PR Campaign", "Your company launches a massive PR campaign highlighting community initiatives.", 1.0, 1.0, 0.1, 7);
+                return true;
+            },
+            .crisis_management => {
+                // Reduce impact of active negative events
+                game.crisis_management_days = 10;
+                return true;
+            },
+        }
+    }
+    
+    /// Update strategy cooldowns
+    pub fn updateCooldown(self: *CorporateStrategy) void {
+        if (self.current_cooldown > 0) {
+            self.current_cooldown -= 1;
+        }
+    }
+};
+
 /// Structure representing the tycoon mode
 pub const TycoonMode = struct {
     oil_fields: std.ArrayList(oil_field.OilField),
@@ -141,6 +338,14 @@ pub const TycoonMode = struct {
     market: MarketSimulation, // Market simulation
     player_market_share: f32, // Player's share of the global market
     player_production_rate: f32, // Player's total production in barrels per day
+    
+    // New fields for company strategy system
+    active_strategy: ?*CorporateStrategy, // Currently active corporate strategy
+    available_strategies: [5]CorporateStrategy, // Available strategies to choose from
+    tech_boost_days: u32 = 0, // Days remaining for tech boost special ability
+    tech_boost_multiplier: f32 = 1.0, // Multiplier for tech advancement
+    crisis_management_days: u32 = 0, // Days remaining for crisis management
+    
     allocator: std.mem.Allocator,
     
     /// Initialize a new tycoon mode
@@ -180,6 +385,34 @@ pub const TycoonMode = struct {
             .completed = false,
         });
         
+        // Add more research projects for depth
+        try research_projects.append(ResearchProject{
+            .name = "Deep Sea Drilling",
+            .description = "Allows exploration of offshore oil fields with higher capacity",
+            .cost = 120000.0,
+            .duration_days = 40,
+            .days_researched = 0,
+            .completed = false,
+        });
+        
+        try research_projects.append(ResearchProject{
+            .name = "Automated Extraction",
+            .description = "Reduces operating costs by 20% through automation",
+            .cost = 85000.0,
+            .duration_days = 35,
+            .days_researched = 0,
+            .completed = false,
+        });
+        
+        try research_projects.append(ResearchProject{
+            .name = "Market Prediction AI",
+            .description = "Provides early warnings about market shifts",
+            .cost = 100000.0,
+            .duration_days = 30,
+            .days_researched = 0,
+            .completed = false,
+        });
+        
         // Create some available oil fields to purchase
         var field1 = oil_field.OilField.init(5000.0, 10.0);
         field1.quality = 0.8;
@@ -195,6 +428,15 @@ pub const TycoonMode = struct {
         field3.quality = 0.9;
         field3.depth = 1.0;
         try available_fields.append(field3);
+        
+        // Initialize corporate strategies
+        const strategies = [_]CorporateStrategy{
+            CorporateStrategy.strategies.market_dominator,
+            CorporateStrategy.strategies.tech_innovator,
+            CorporateStrategy.strategies.market_manipulator,
+            CorporateStrategy.strategies.sustainable_developer,
+            CorporateStrategy.strategies.crisis_expert,
+        };
         
         return TycoonMode{
             .oil_fields = oil_fields,
@@ -213,204 +455,33 @@ pub const TycoonMode = struct {
             .market = market,
             .player_market_share = 0.01, // Starting with 1% market share
             .player_production_rate = 0.0, // No production yet
+            .active_strategy = null,
+            .available_strategies = strategies,
             .allocator = allocator,
         };
-    }
-    
-    /// Clean up resources
-    pub fn deinit(self: *TycoonMode) void {
-        self.oil_fields.deinit();
-        self.available_fields.deinit();
-        self.research_projects.deinit();
-        self.market.deinit();
-    }
-    
-    /// Purchase an oil field
-    pub fn purchaseOilField(self: *TycoonMode, field_index: usize) !bool {
-        if (field_index >= self.available_fields.items.len) {
-            return false;
-        }
-        
-        const field = self.available_fields.items[field_index];
-        
-        // Calculate field price based on size, quality, and market conditions
-        const base_price = field.max_capacity * 10.0 * field.quality;
-        const final_price = base_price * (1.0 - (0.5 * (1.0 - field.getPercentageFull())));
-        
-        if (self.money < final_price) {
-            return false; // Not enough money
-        }
-        
-        // Purchase the field
-        self.money -= final_price;
-        try self.oil_fields.append(field);
-        
-        // Remove from available fields
-        _ = self.available_fields.orderedRemove(field_index);
-        
-        return true;
-    }
-    
-    /// Upgrade a department
-    pub fn upgradeDepartment(self: *TycoonMode, department: Department) bool {
-        const dept_index = @intFromEnum(department);
-        const current_level = self.department_levels[dept_index];
-        const cost = department.getUpgradeCost(current_level);
-        
-        if (self.money < cost) {
-            return false; // Not enough money
-        }
-        
-        // Perform upgrade
-        self.money -= cost;
-        self.department_levels[dept_index] += 1;
-        
-        // Apply department benefits
-        switch (department) {
-            .research => {
-                // Research benefits will be applied when using the active research project
-            },
-            .production => {
-                // Improve all oil fields' extraction rates
-                for (self.oil_fields.items) |*field| {
-                    field.upgradeExtractionRate(1.0);
-                }
-            },
-            .marketing => {
-                // Improve oil selling price
-                self.base_oil_price *= 1.05;
-            },
-            .hr => {
-                // Reduce operating costs
-                self.operating_costs *= 0.95;
-            },
-            .logistics => {
-                // Combination of benefits
-                self.operating_costs *= 0.97;
-                self.base_oil_price *= 1.02;
-            },
-        }
-        
-        return true;
-    }
-    
-    /// Start a research project
-    pub fn startResearch(self: *TycoonMode, project_index: usize) bool {
-        if (project_index >= self.research_projects.items.len) {
-            return false;
-        }
-        
-        const project = &self.research_projects.items[project_index];
-        
-        if (project.completed or project.days_researched > 0) {
-            return false; // Already completed or in progress
-        }
-        
-        if (self.money < project.cost) {
-            return false; // Not enough money
-        }
-        
-        // Start the project
-        self.money -= project.cost;
-        self.active_research = project;
-        
-        return true;
-    }
-    
-    /// Calculate daily profit
-    pub fn calculateDailyProfit(self: *TycoonMode) f32 {
-        var total_extracted: f32 = 0.0;
-        
-        // Calculate extraction from all fields
-        for (self.oil_fields.items) |*field| {
-            // Apply production department bonus
-            const prod_level = self.department_levels[@intFromEnum(Department.production)];
-            const extraction_bonus = 1.0 + (0.05 * @as(f32, @floatFromInt(prod_level - 1)));
-            
-            total_extracted += field.extract(1.0) * extraction_bonus;
-        }
-        
-        // Calculate revenue
-        const market_level = self.department_levels[@intFromEnum(Department.marketing)];
-        
-        const price_multiplier = self.market_condition.getPriceMultiplier() * 
-                               (1.0 + (0.03 * @as(f32, @floatFromInt(market_level - 1))));
-        
-        const revenue = total_extracted * self.oil_price * price_multiplier;
-        
-        // Apply operating costs
-        const hr_level = self.department_levels[@intFromEnum(Department.hr)];
-        const cost_reduction = 1.0 - (0.02 * @as(f32, @floatFromInt(hr_level - 1)));
-        
-        const daily_costs = self.operating_costs * cost_reduction;
-        
-        return revenue - daily_costs;
-    }
-    
-    /// Update market conditions
-    fn updateMarketConditions(self: *TycoonMode) void {
-        if (self.game_days % 30 == 0) { // Change approximately monthly
-            // Simple market condition change simulation
-            const rand_val = @mod(self.game_days, 4);
-            self.market_condition = @enumFromInt(rand_val);
-            
-            // Update oil price based on market conditions
-            self.oil_price = self.base_oil_price * self.market_condition.getPriceMultiplier();
-        }
-    }
-    
-    /// Simulate a stock market value for the company
-    fn calculateCompanyValue(self: *TycoonMode) f32 {
-        var field_value: f32 = 0.0;
-        
-        // Value from oil fields
-        for (self.oil_fields.items) |field| {
-            field_value += field.oil_amount * self.oil_price * field.quality;
-        }
-        
-        // Base value from money
-        const base_value = self.money;
-        
-        // Value from infrastructure (departments)
-        var infrastructure_value: f32 = 0.0;
-        for (self.department_levels) |level| {
-            infrastructure_value += 50000.0 * @as(f32, @floatFromInt(level));
-        }
-        
-        // Value from research and reputation
-        const research_value = 100000.0 * self.company_reputation;
-        
-        // Combined value
-        return base_value + field_value + infrastructure_value + research_value;
-    }
-    
-    /// Generate a new random oil field to purchase
-    pub fn generateNewOilField(self: *TycoonMode) !void {
-        const research_level = self.department_levels[@intFromEnum(Department.research)];
-        const quality_bonus = 0.05 * @as(f32, @floatFromInt(research_level - 1));
-        
-        // Base field characteristics
-        const size_options = [_]f32{ 3000.0, 5000.0, 8000.0, 12000.0, 20000.0 };
-        const rate_options = [_]f32{ 5.0, 8.0, 10.0, 15.0, 20.0 };
-        const quality_options = [_]f32{ 0.7, 0.8, 0.9, 1.0, 1.1, 1.2 };
-        const depth_options = [_]f32{ 0.8, 1.0, 1.2, 1.5, 2.0 };
-        
-        // Use game days as simple random seed (in real game use actual RNG)
-        const size_index = @mod(self.game_days, size_options.len);
-        const rate_index = @mod(self.game_days + 1, rate_options.len);
-        const quality_index = @mod(self.game_days + 2, quality_options.len);
-        const depth_index = @mod(self.game_days + 3, depth_options.len);
-        
-        var new_field = oil_field.OilField.init(size_options[size_index], rate_options[rate_index]);
-        new_field.quality = quality_options[quality_index] + quality_bonus;
-        new_field.depth = depth_options[depth_index];
-        
-        try self.available_fields.append(new_field);
     }
     
     /// Process a day in the tycoon mode
     pub fn advanceDay(self: *TycoonMode) !void {
         self.game_days += 1;
+        
+        // Update strategy cooldowns
+        if (self.active_strategy) |strategy| {
+            strategy.updateCooldown();
+        }
+        
+        // Update tech boost
+        if (self.tech_boost_days > 0) {
+            self.tech_boost_days -= 1;
+            if (self.tech_boost_days == 0) {
+                self.tech_boost_multiplier = 1.0;
+            }
+        }
+        
+        // Update crisis management
+        if (self.crisis_management_days > 0) {
+            self.crisis_management_days -= 1;
+        }
         
         // Update market simulation first
         try self.market.simulateDay();
@@ -419,6 +490,12 @@ pub const TycoonMode = struct {
         self.market_condition = self.market.current_condition;
         self.oil_price = self.market.current_oil_price;
         
+        // Apply strategy modifiers if active
+        if (self.active_strategy) |strategy| {
+            // Modify oil price based on strategy
+            self.oil_price *= strategy.price_modifier;
+        }
+        
         // Calculate daily production from all fields
         var total_extracted: f32 = 0;
         var total_capacity: f32 = 0;
@@ -426,7 +503,14 @@ pub const TycoonMode = struct {
         for (self.oil_fields.items) |*field| {
             // Calculate extraction modified by department levels
             const production_modifier = 1.0 + @as(f32, @floatFromInt(self.department_levels[@intFromEnum(Department.production)])) * 0.1;
-            const extraction_rate = field.extraction_rate * field.quality * production_modifier;
+            
+            // Apply strategy production modifier
+            const strategy_production_modifier = if (self.active_strategy) |strategy|
+                strategy.production_modifier
+            else
+                1.0;
+            
+            const extraction_rate = field.extraction_rate * field.quality * production_modifier * strategy_production_modifier;
             
             // Apply market condition modifier to extraction rate
             const market_modifier = self.market_condition.getDemandFactor();
@@ -454,7 +538,14 @@ pub const TycoonMode = struct {
         
         // Apply price multipliers based on marketing department level
         const marketing_multiplier = 1.0 + @as(f32, @floatFromInt(self.department_levels[@intFromEnum(Department.marketing)])) * 0.05;
-        const effective_price = self.oil_price * marketing_multiplier;
+        
+        // Apply strategy price modifier
+        const strategy_price_modifier = if (self.active_strategy) |strategy|
+            strategy.price_modifier
+        else
+            1.0;
+        
+        const effective_price = self.oil_price * marketing_multiplier * strategy_price_modifier;
         
         // Calculate daily income
         const daily_income = total_extracted * effective_price;
@@ -474,7 +565,17 @@ pub const TycoonMode = struct {
         if (self.active_research) |project| {
             // Research speed is affected by research department level
             const research_speed = 1.0 + @as(f32, @floatFromInt(self.department_levels[@intFromEnum(Department.research)])) * 0.2;
-            const days_progress = @max(1, @as(u32, @intFromFloat(research_speed)));
+            
+            // Apply tech boost multiplier if active
+            const final_research_speed = research_speed * self.tech_boost_multiplier;
+            
+            // Apply strategy tech modifier
+            const strategy_tech_modifier = if (self.active_strategy) |strategy|
+                strategy.tech_modifier
+            else
+                1.0;
+            
+            const days_progress = @max(1, @as(u32, @intFromFloat(final_research_speed * strategy_tech_modifier)));
             
             var i: u32 = 0;
             while (i < days_progress) : (i += 1) {
@@ -497,13 +598,39 @@ pub const TycoonMode = struct {
                 } else if (std.mem.eql(u8, project.name, "Oil Quality Analysis")) {
                     // Improve field quality detection - generate new higher quality fields
                     try self.generateNewFields(3, 1.2);
+                } else if (std.mem.eql(u8, project.name, "Deep Sea Drilling")) {
+                    // Generate offshore fields with higher capacity
+                    try self.generateOffshoreFields(2);
+                } else if (std.mem.eql(u8, project.name, "Automated Extraction")) {
+                    // Reduce operating costs
+                    self.operating_costs *= 0.8;
+                } else if (std.mem.eql(u8, project.name, "Market Prediction AI")) {
+                    // Enable market predictions
+                    self.market.predictability_enabled = true;
                 }
+                
+                // Show research completion message
+                // This would typically be handled by the UI, but we'll set a flag here
+                self.market.research_completed = true;
+                self.market.last_completed_research = project.name;
             }
         }
         
         // Chance for reputation effects from world events
         for (self.market.active_events.items) |event| {
-            self.company_reputation += event.reputation_impact / @as(f32, @floatFromInt(event.duration_days));
+            // Apply strategy reputation modifier and crisis management
+            var reputation_impact = event.reputation_impact;
+            
+            if (self.active_strategy) |strategy| {
+                reputation_impact *= strategy.reputation_modifier;
+            }
+            
+            // Reduce negative impacts if crisis management is active
+            if (self.crisis_management_days > 0 and reputation_impact < 0) {
+                reputation_impact *= 0.5; // 50% reduction
+            }
+            
+            self.company_reputation += reputation_impact / @as(f32, @floatFromInt(event.duration_days));
         }
         
         // Keep reputation in valid range
@@ -518,29 +645,180 @@ pub const TycoonMode = struct {
         if (self.game_days % 30 == 0) {
             self.operating_costs *= 1.01 + @as(f32, @floatFromInt(self.oil_fields.items.len)) * 0.01;
         }
+        
+        // Generate crisis events
+        try self.checkForCrisisEvents();
+    }
+
+    /// Check for potential crisis events
+    fn checkForCrisisEvents(self: *TycoonMode) !void {
+        // Crisis events should be rare but impactful
+        const base_crisis_chance = 0.01; // 1% daily chance
+        
+        // Adjust based on market condition
+        var crisis_chance = switch (self.market_condition) {
+            .boom => base_crisis_chance * 0.5,
+            .stable => base_crisis_chance,
+            .recession => base_crisis_chance * 2.0,
+            .crisis => base_crisis_chance * 4.0,
+        };
+        
+        // Adjust based on company size - larger companies attract more problems
+        crisis_chance *= 1.0 + self.player_market_share;
+        
+        // Adjust based on reputation - higher reputation means fewer crises
+        crisis_chance *= 2.0 - self.company_reputation;
+        
+        // Adjust based on strategy frequency modifier
+        if (self.active_strategy) |strategy| {
+            crisis_chance *= strategy.market_event_frequency_modifier;
+        }
+        
+        // Check if crisis occurs
+        if (std.crypto.random.float(f32) < crisis_chance) {
+            // Select a crisis type
+            const crisis_types = [_][]const u8{
+                "Oil Spill Disaster",
+                "Worker Strike",
+                "Equipment Failure",
+                "Government Investigation",
+                "Activist Blockade",
+                "Tax Audit",
+                "Cyber Attack",
+                "Executive Scandal",
+                "Supply Chain Disruption",
+            };
+            
+            const crisis_descriptions = [_][]const u8{
+                "One of your oil fields has experienced a major spill, causing environmental damage.",
+                "Workers have gone on strike demanding better conditions and pay.",
+                "Critical equipment at multiple sites has failed simultaneously.",
+                "Government regulators are investigating your business practices.",
+                "Environmental activists have blockaded access to your facilities.",
+                "Tax authorities are conducting a comprehensive audit of your finances.",
+                "Your company's systems have been compromised in a cyber attack.",
+                "A high-ranking executive is embroiled in a public scandal.",
+                "Key suppliers have failed to deliver essential equipment and materials.",
+            };
+            
+            const crisis_index = std.crypto.random.uintLessThan(usize, crisis_types.len);
+            
+            // Create the crisis event
+            try self.market.addCustomEvent(
+                crisis_types[crisis_index],
+                crisis_descriptions[crisis_index],
+                // Severe price impact (usually negative)
+                0.85 + std.crypto.random.float(f32) * 0.2,
+                // Reduce demand
+                0.8 + std.crypto.random.float(f32) * 0.15,
+                // Major reputation hit
+                -0.2 - std.crypto.random.float(f32) * 0.1,
+                // Last 7-14 days
+                7 + std.crypto.random.uintLessThan(u32, 8)
+            );
+            
+            // Apply immediate financial penalty
+            const penalty = self.money * (0.05 + std.crypto.random.float(f32) * 0.1);
+            self.money -= penalty;
+            
+            // Flag crisis for UI notification
+            self.market.crisis_occurred = true;
+            self.market.latest_crisis = crisis_types[crisis_index];
+        }
     }
     
-    /// Generate new oil fields for purchase
-    pub fn generateNewFields(self: *TycoonMode, count: usize, quality_multiplier: f32) !void {
+    /// Attempt hostile takeover of competitor assets
+    fn attemptHostileTakeover(self: *TycoonMode) bool {
+        // Must have substantial funds
+        if (self.money < 1000000.0 or self.market.competitors.items.len == 0) {
+            return false;
+        }
+        
+        // Find the weakest competitor
+        var weakest_index: usize = 0;
+        var weakest_value: f32 = std.math.inf(f32);
+        
+        for (self.market.competitors.items, 0..) |competitor, i| {
+            const competitor_value = competitor.production_rate * competitor.fields_owned * 10000.0;
+            if (competitor_value < weakest_value) {
+                weakest_value = competitor_value;
+                weakest_index = i;
+            }
+        }
+        
+        // Calculate takeover cost - based on competitor size and a random factor
+        const takeover_cost = weakest_value * (0.7 + std.crypto.random.float(f32) * 0.6);
+        
+        // Check if player can afford it
+        if (self.money < takeover_cost) {
+            return false;
+        }
+        
+        // Deduct cost
+        self.money -= takeover_cost;
+        
+        // Acquire some of their fields (convert to player fields)
+        const fields_acquired = @max(1, self.market.competitors.items[weakest_index].fields_owned / 3);
+        
+        // Update competitor
+        self.market.competitors.items[weakest_index].fields_owned -= fields_acquired;
+        self.market.competitors.items[weakest_index].production_rate *= 0.7; // Big production hit
+        self.market.competitors.items[weakest_index].size *= 0.8; // Market share decrease
+        
+        // Increase player fields by roughly equivalent fields
+        for (0..fields_acquired) |_| {
+            const field_size = 5000.0 + std.crypto.random.float(f32) * 10000.0;
+            const field_rate = 10.0 + std.crypto.random.float(f32) * 15.0;
+            var new_field = oil_field.OilField.init(field_size, field_rate);
+            new_field.quality = 0.8 + std.crypto.random.float(f32) * 0.4;
+            new_field.depth = 1.0 + std.crypto.random.float(f32) * 1.0;
+            
+            // Random depletion level
+            new_field.oil_amount *= 0.5 + std.crypto.random.float(f32) * 0.5;
+            
+            self.oil_fields.append(new_field) catch {};
+        }
+        
+        // Reputation hit for aggressive action
+        self.company_reputation = @max(0.0, self.company_reputation - 0.1);
+        
+        // Create market event for the takeover
+        self.market.addCustomEvent(
+            "Hostile Takeover",
+            "Your company has executed a hostile takeover of competitor assets.",
+            1.05, // Slight price increase due to market concentration
+            1.0, // Neutral demand impact
+            -0.05, // Small reputation hit
+            14 // Two-week news cycle
+        ) catch {};
+        
+        return true;
+    }
+    
+    /// Generate offshore oil fields (higher capacity but more expensive)
+    fn generateOffshoreFields(self: *TycoonMode, count: usize) !void {
         var i: usize = 0;
         while (i < count) : (i += 1) {
-            // Random size
-            const size_factor = std.crypto.random.float(f32) * 2.0 + 0.5; // 0.5 to 2.5
-            const size = 5000.0 + size_factor * 5000.0;
+            // Offshore fields are larger but more expensive
+            const size_factor = 1.5 + std.crypto.random.float(f32) * 1.5; // 1.5 to 3.0
+            const size = 10000.0 + size_factor * 5000.0;
             
             // Random extraction rate
-            const rate_factor = std.crypto.random.float(f32) + 0.5; // 0.5 to 1.5
-            const rate = 5.0 + rate_factor * 10.0;
+            const rate_factor = std.crypto.random.float(f32) + 0.8; // 0.8 to 1.8
+            const rate = 8.0 + rate_factor * 8.0;
             
             var new_field = oil_field.OilField.init(size, rate);
             
-            // Quality affected by research and random factors
-            const quality_factor = std.crypto.random.float(f32) * 0.5 + 0.7; // 0.7 to 1.2
-            new_field.quality = quality_factor * quality_multiplier;
+            // Offshore fields have higher quality
+            const quality_factor = std.crypto.random.float(f32) * 0.3 + 1.0; // 1.0 to 1.3
+            new_field.quality = quality_factor;
             
-            // Depth affects difficulty
-            const depth_factor = std.crypto.random.float(f32) * 1.5 + 0.5; // 0.5 to 2.0
+            // Offshore fields are deeper
+            const depth_factor = std.crypto.random.float(f32) * 1.0 + 2.0; // 2.0 to 3.0
             new_field.depth = depth_factor;
+            
+            // Mark as offshore for UI visualization
+            new_field.is_offshore = true;
             
             try self.available_fields.append(new_field);
         }
@@ -1086,6 +1364,43 @@ pub const Competitor = struct {
     }
 };
 
+/// Decision event presented to the player
+pub const DecisionEvent = struct {
+    title: []const u8,
+    description: []const u8,
+    choices: [3]Choice, // Always 3 choices for consistency
+    shown: bool = false,
+    
+    /// A choice the player can make
+    pub const Choice = struct {
+        text: []const u8,
+        money_impact: f32,
+        reputation_impact: f32,
+        production_impact: f32,
+        market_impact: f32,
+        special_effect: ?SpecialEffect = null,
+        
+        /// Special effects that can impact the game
+        pub const SpecialEffect = enum {
+            improve_field_quality,
+            reduce_operating_costs,
+            attract_new_investors,
+            unlock_research_project,
+            competitor_backlash,
+            
+            pub fn getDescription(self: SpecialEffect) []const u8 {
+                return switch (self) {
+                    .improve_field_quality => "Your engineers improve oil field quality by 10%",
+                    .reduce_operating_costs => "You optimize operations, reducing costs by 5%",
+                    .attract_new_investors => "New investors provide a capital infusion",
+                    .unlock_research_project => "You gain access to a new research project",
+                    .competitor_backlash => "Competitors retaliate against your actions",
+                };
+            }
+        };
+    };
+};
+
 /// Market simulation for the tycoon mode
 pub const MarketSimulation = struct {
     current_condition: MarketCondition,
@@ -1102,6 +1417,19 @@ pub const MarketSimulation = struct {
     arena: std.heap.ArenaAllocator, // Arena allocator for efficient memory management
     parent_allocator: std.mem.Allocator, // Store the parent allocator for reset operations
     
+    // Flags for UI notifications
+    crisis_occurred: bool = false,
+    latest_crisis: []const u8 = "",
+    research_completed: bool = false,
+    last_completed_research: []const u8 = "",
+    predictability_enabled: bool = false, // Unlocked by Market Prediction AI research
+    
+    // New fields for decision events
+    decision_events: std.ArrayList(DecisionEvent),
+    current_decision: ?*DecisionEvent = null,
+    decision_pending: bool = false,
+    daily_decision_chance: f32 = 0.2, // 20% chance per day
+    
     /// Initialize a new market simulation
     pub fn init(allocator: std.mem.Allocator) !MarketSimulation {
         // Create an arena allocator backed by the parent allocator
@@ -1115,6 +1443,7 @@ pub const MarketSimulation = struct {
         const possible_events = std.ArrayList(WorldEvent).init(arena_allocator);
         const price_history = std.ArrayList(f32).init(arena_allocator);
         const demand_history = std.ArrayList(f32).init(arena_allocator);
+        const decision_events = std.ArrayList(DecisionEvent).init(arena_allocator);
         
         // Add initial competitors with diverse personalities and strategies
         try competitors.append(Competitor.init("PetroCorp", Competitor.profiles.aggressive_expander));
@@ -1221,6 +1550,9 @@ pub const MarketSimulation = struct {
             });
         }
         
+        // Initialize decision events
+        try initializeDecisionEvents(&decision_events);
+        
         // Pre-allocate space for a year of history to avoid frequent reallocations
         try price_history.ensureTotalCapacity(365);
         try demand_history.ensureTotalCapacity(365);
@@ -1245,9 +1577,239 @@ pub const MarketSimulation = struct {
             .possible_events = possible_events,
             .price_history = price_history,
             .demand_history = demand_history,
+            .decision_events = decision_events,
             .arena = arena,
             .parent_allocator = allocator,
         };
+    }
+    
+    /// Initialize all decision events
+    fn initializeDecisionEvents(events: *std.ArrayList(DecisionEvent)) !void {
+        // Decision 1: Drilling rights negotiation
+        try events.append(DecisionEvent{
+            .title = "Drilling Rights Negotiation",
+            .description = "A local government official approaches you about acquiring drilling rights in a promising region, but they're expecting some 'cooperation'.",
+            .choices = [_]DecisionEvent.Choice{
+                .{
+                    .text = "Pay the requested 'facilitation fee' to secure the rights",
+                    .money_impact = -50000.0,
+                    .reputation_impact = -0.05,
+                    .production_impact = 0.15,
+                    .market_impact = 0.0,
+                    .special_effect = .improve_field_quality,
+                },
+                .{
+                    .text = "Negotiate through official channels only",
+                    .money_impact = -20000.0,
+                    .reputation_impact = 0.05,
+                    .production_impact = 0.05,
+                    .market_impact = 0.0,
+                    .special_effect = null,
+                },
+                .{
+                    .text = "Decline and look elsewhere",
+                    .money_impact = 0.0,
+                    .reputation_impact = 0.0,
+                    .production_impact = 0.0,
+                    .market_impact = 0.0,
+                    .special_effect = null,
+                },
+            },
+        });
+        
+        // Decision 2: Environmental regulations
+        try events.append(DecisionEvent{
+            .title = "Environmental Regulations",
+            .description = "New environmental regulations are being discussed that would increase your operating costs. You have an opportunity to lobby against them.",
+            .choices = [_]DecisionEvent.Choice{
+                .{
+                    .text = "Aggressively lobby against the regulations",
+                    .money_impact = -75000.0,
+                    .reputation_impact = -0.1,
+                    .production_impact = 0.0,
+                    .market_impact = 0.02,
+                    .special_effect = null,
+                },
+                .{
+                    .text = "Invest in more environmentally friendly technology",
+                    .money_impact = -100000.0,
+                    .reputation_impact = 0.15,
+                    .production_impact = -0.05,
+                    .market_impact = 0.0,
+                    .special_effect = .reduce_operating_costs,
+                },
+                .{
+                    .text = "Adapt to the new regulations without resistance",
+                    .money_impact = -30000.0,
+                    .reputation_impact = 0.05,
+                    .production_impact = -0.03,
+                    .market_impact = 0.0,
+                    .special_effect = null,
+                },
+            },
+        });
+        
+        // Decision 3: Competitor takeover
+        try events.append(DecisionEvent{
+            .title = "Competitor Acquisition Opportunity",
+            .description = "A smaller competitor is struggling and could be acquired at a favorable price. However, this might trigger scrutiny from regulators.",
+            .choices = [_]DecisionEvent.Choice{
+                .{
+                    .text = "Aggressively pursue the acquisition",
+                    .money_impact = -500000.0,
+                    .reputation_impact = -0.05,
+                    .production_impact = 0.2,
+                    .market_impact = 0.03,
+                    .special_effect = .competitor_backlash,
+                },
+                .{
+                    .text = "Offer a strategic partnership instead",
+                    .money_impact = -200000.0,
+                    .reputation_impact = 0.05,
+                    .production_impact = 0.1,
+                    .market_impact = 0.01,
+                    .special_effect = null,
+                },
+                .{
+                    .text = "Decline the opportunity",
+                    .money_impact = 0.0,
+                    .reputation_impact = 0.0,
+                    .production_impact = 0.0,
+                    .market_impact = 0.0,
+                    .special_effect = null,
+                },
+            },
+        });
+        
+        // Decision 4: Research breakthrough
+        try events.append(DecisionEvent{
+            .title = "Research Breakthrough",
+            .description = "Your R&D team has made a breakthrough that could be developed in different directions.",
+            .choices = [_]DecisionEvent.Choice{
+                .{
+                    .text = "Focus on extraction efficiency",
+                    .money_impact = -150000.0,
+                    .reputation_impact = 0.0,
+                    .production_impact = 0.15,
+                    .market_impact = 0.0,
+                    .special_effect = .improve_field_quality,
+                },
+                .{
+                    .text = "Focus on cost reduction",
+                    .money_impact = -150000.0,
+                    .reputation_impact = 0.0,
+                    .production_impact = 0.0,
+                    .market_impact = 0.0,
+                    .special_effect = .reduce_operating_costs,
+                },
+                .{
+                    .text = "Focus on environmental impact",
+                    .money_impact = -150000.0,
+                    .reputation_impact = 0.15,
+                    .production_impact = 0.0,
+                    .market_impact = 0.0,
+                    .special_effect = .unlock_research_project,
+                },
+            },
+        });
+        
+        // Decision 5: Investment round
+        try events.append(DecisionEvent{
+            .title = "Investor Interest",
+            .description = "Investors are showing interest in your company. How will you approach this opportunity?",
+            .choices = [_]DecisionEvent.Choice{
+                .{
+                    .text = "Seek maximum investment by promising aggressive growth",
+                    .money_impact = 1000000.0,
+                    .reputation_impact = -0.05,
+                    .production_impact = 0.0,
+                    .market_impact = 0.02,
+                    .special_effect = .attract_new_investors,
+                },
+                .{
+                    .text = "Balance growth promises with sustainable practices",
+                    .money_impact = 500000.0,
+                    .reputation_impact = 0.05,
+                    .production_impact = 0.0,
+                    .market_impact = 0.01,
+                    .special_effect = null,
+                },
+                .{
+                    .text = "Maintain current ownership structure",
+                    .money_impact = 0.0,
+                    .reputation_impact = 0.0,
+                    .production_impact = 0.0,
+                    .market_impact = 0.0,
+                    .special_effect = null,
+                },
+            },
+        });
+    }
+    
+    /// Select a random decision event to present to the player
+    pub fn selectRandomDecision(self: *MarketSimulation) bool {
+        // Only trigger if no decision is pending
+        if (self.decision_pending) {
+            return false;
+        }
+        
+        // Don't show decisions too frequently
+        if (std.crypto.random.float(f32) > self.daily_decision_chance) {
+            return false;
+        }
+        
+        // Find unshown decisions
+        var available_decisions = std.ArrayList(*DecisionEvent).init(self.arena.allocator());
+        defer available_decisions.deinit();
+        
+        for (self.decision_events.items) |*event| {
+            if (!event.shown) {
+                available_decisions.append(event) catch return false;
+            }
+        }
+        
+        // If all decisions have been shown, reset them
+        if (available_decisions.items.len == 0) {
+            for (self.decision_events.items) |*event| {
+                event.shown = false;
+            }
+            
+            // Try again
+            return self.selectRandomDecision();
+        }
+        
+        // Select a random decision
+        const random_index = std.crypto.random.uintLessThan(usize, available_decisions.items.len);
+        self.current_decision = available_decisions.items[random_index];
+        self.decision_pending = true;
+        
+        return true;
+    }
+    
+    /// Add a custom world event - useful for crisis events and special abilities
+    pub fn addCustomEvent(self: *MarketSimulation, name: []const u8, description: []const u8, price_impact: f32, demand_impact: f32, reputation_impact: f32, duration_days: u32) !void {
+        try self.active_events.append(WorldEvent{
+            .name = name,
+            .description = description,
+            .price_impact = price_impact,
+            .demand_impact = demand_impact,
+            .reputation_impact = reputation_impact,
+            .duration_days = duration_days,
+            .days_active = 0,
+            .is_active = true,
+        });
+    }
+    
+    /// Apply price manipulation for the market manipulation special ability
+    pub fn applyPriceManipulation(self: *MarketSimulation, direction: f32, days: u32) void {
+        self.addCustomEvent(
+            "Market Manipulation",
+            "Your company has executed strategic price manipulation tactics.",
+            direction, // Price multiplier
+            1.0, // No impact on demand
+            -0.02, // Small reputation hit
+            days
+        ) catch {};
     }
     
     /// Clean up resources
@@ -1275,6 +1837,7 @@ pub const MarketSimulation = struct {
         self.possible_events = std.ArrayList(WorldEvent).init(arena_allocator);
         self.price_history = std.ArrayList(f32).init(arena_allocator);
         self.demand_history = std.ArrayList(f32).init(arena_allocator);
+        self.decision_events = std.ArrayList(DecisionEvent).init(arena_allocator);
         
         // Preallocate history capacity
         try self.price_history.ensureTotalCapacity(365);
@@ -1287,9 +1850,96 @@ pub const MarketSimulation = struct {
         self.global_demand = 100.0;
         self.global_supply = 101.0;
         self.volatility = 0.1;
+        self.decision_pending = false;
+        self.current_decision = null;
         
-        // Re-initialize competitors and events
-        // (skipped for brevity, would duplicate the initialization code)
+        // Reset UI flags
+        self.crisis_occurred = false;
+        self.latest_crisis = "";
+        self.research_completed = false;
+        self.last_completed_research = "";
+        self.predictability_enabled = false;
+    }
+    
+    /// Apply the effects of a decision choice
+    pub fn applyDecisionChoice(self: *MarketSimulation, game: *TycoonMode, choice_index: usize) void {
+        if (self.current_decision == null or !self.decision_pending) {
+            return;
+        }
+        
+        const decision = self.current_decision.?;
+        if (choice_index >= decision.choices.len) {
+            return;
+        }
+        
+        const choice = decision.choices[choice_index];
+        
+        // Apply impacts
+        game.money += choice.money_impact;
+        game.company_reputation = @min(1.0, @max(0.0, game.company_reputation + choice.reputation_impact));
+        
+        // If production impact, apply to all fields
+        if (choice.production_impact != 0.0) {
+            for (game.oil_fields.items) |*field| {
+                field.extraction_rate *= (1.0 + choice.production_impact);
+            }
+        }
+        
+        // Market impact affects price and volatility
+        if (choice.market_impact != 0.0) {
+            self.current_oil_price *= (1.0 + choice.market_impact);
+            self.volatility = @min(0.5, self.volatility + choice.market_impact);
+        }
+        
+        // Apply special effects
+        if (choice.special_effect) |effect| {
+            switch (effect) {
+                .improve_field_quality => {
+                    for (game.oil_fields.items) |*field| {
+                        field.quality *= 1.1; // 10% quality improvement
+                    }
+                },
+                .reduce_operating_costs => {
+                    game.operating_costs *= 0.95; // 5% cost reduction
+                },
+                .attract_new_investors => {
+                    // Already handled by the money impact, but could add additional effects
+                    game.company_value *= 1.1; // Boost company valuation
+                },
+                .unlock_research_project => {
+                    // Add a new research project
+                    game.research_projects.append(ResearchProject{
+                        .name = "Advanced Environmental Technologies",
+                        .description = "Cutting-edge environmental protection systems that boost reputation",
+                        .cost = 120000.0,
+                        .duration_days = 45,
+                        .days_researched = 0,
+                        .completed = false,
+                    }) catch {};
+                },
+                .competitor_backlash => {
+                    // Competitors become more aggressive
+                    for (self.competitors.items) |*competitor| {
+                        competitor.aggressiveness = @min(1.0, competitor.aggressiveness + 0.1);
+                    }
+                    
+                    // Add a negative event
+                    self.addCustomEvent(
+                        "Industry Backlash",
+                        "Competitors have united against your aggressive tactics.",
+                        0.95, // Price impact
+                        0.95, // Demand impact
+                        -0.05, // Reputation impact
+                        14 // Duration
+                    ) catch {};
+                },
+            }
+        }
+        
+        // Mark the decision as shown
+        decision.shown = true;
+        self.decision_pending = false;
+        self.current_decision = null;
     }
     
     /// Simulate market changes for one day
@@ -1326,6 +1976,9 @@ pub const MarketSimulation = struct {
             self.active_events.deinit();
             self.active_events = new_active_events;
         }
+        
+        // Select a random decision if appropriate
+        _ = self.selectRandomDecision();
         
         // Chance for new event
         const event_chance = 0.03 * self.volatility;

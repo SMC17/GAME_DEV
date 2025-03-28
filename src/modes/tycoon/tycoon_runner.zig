@@ -72,13 +72,13 @@ pub fn main() !void {
                 switch (buf[0]) {
                     'n', 'N' => {
                         // Navigate to next menu item
-                        selected_menu_item = (selected_menu_item + 1) % 7;
+                        selected_menu_item = (selected_menu_item + 1) % 9; // Updated for new menu items
                         redraw_timer = redraw_interval; // Force redraw
                     },
                     'p', 'P' => {
                         // Navigate to previous menu item
                         if (selected_menu_item == 0) {
-                            selected_menu_item = 6;
+                            selected_menu_item = 8; // Updated for new menu items
                         } else {
                             selected_menu_item -= 1;
                         }
@@ -99,19 +99,27 @@ pub fn main() !void {
                                 try handleUpgradeDepartment(&game, &ui);
                                 redraw_timer = redraw_interval; // Force redraw
                             },
-                            3 => { // Start Research
+                            3 => { // Research Projects
                                 try handleResearch(&game, &ui);
                                 redraw_timer = redraw_interval; // Force redraw
                             },
-                            4 => { // View Market Details
+                            4 => { // Corporate Strategy - New option
+                                try displayStrategySelection(&game, &ui);
+                                redraw_timer = redraw_interval; // Force redraw
+                            },
+                            5 => { // Activate Special Ability - New option
+                                try displaySpecialAbility(&game, &ui);
+                                redraw_timer = redraw_interval; // Force redraw
+                            },
+                            6 => { // View Market Details
                                 try displayMarketDetails(&game, &ui);
                                 redraw_timer = redraw_interval; // Force redraw
                             },
-                            5 => { // View Reports
+                            7 => { // View Reports
                                 try displayDetailedReports(&game, &ui);
                                 redraw_timer = redraw_interval; // Force redraw
                             },
-                            6 => { // Quit
+                            8 => { // Quit
                                 running = false;
                             },
                             else => {},
@@ -135,6 +143,74 @@ pub fn main() !void {
             // Game simulation tick - only if not paused
             if (!game_paused) {
                 try updateGameState(&game);
+                
+                // Check for decision events
+                if (game.market.decision_pending) {
+                    try displayDecisionEvent(&game, &ui);
+                }
+                
+                // Check for crisis notifications
+                if (game.market.crisis_occurred) {
+                    try ui.clear();
+                    try ui.drawTitle("CRISIS EVENT", .bright_red);
+                    
+                    try ui.println(try std.fmt.allocPrint(ui.allocator, "{s}!", .{game.market.latest_crisis}), .bright_yellow, .bold);
+                    
+                    // Find the event details
+                    for (game.market.active_events.items) |event| {
+                        if (std.mem.eql(u8, event.name, game.market.latest_crisis)) {
+                            try ui.println(event.description, .white, .normal);
+                            try ui.println(try std.fmt.allocPrint(ui.allocator, "\nThis crisis will last for {d} days.", .{event.duration_days}), .yellow, .normal);
+                            break;
+                        }
+                    }
+                    
+                    try ui.println("\nYour company has suffered immediate financial consequences.", .bright_red, .normal);
+                    try ui.println("\nPress Enter to continue...", .white, .normal);
+                    
+                    var buf: [10]u8 = undefined;
+                    _ = try ui.stdout.context.reader().readUntilDelimiterOrEof(&buf, '\n');
+                    
+                    // Reset the flag
+                    game.market.crisis_occurred = false;
+                }
+                
+                // Check for research completion notifications
+                if (game.market.research_completed) {
+                    try ui.clear();
+                    try ui.drawTitle("Research Complete", .bright_green);
+                    
+                    try ui.println(try std.fmt.allocPrint(ui.allocator, "Your team has completed research on {s}!", .{game.market.last_completed_research}), .bright_green, .bold);
+                    
+                    // Display technology-specific messages
+                    if (std.mem.eql(u8, game.market.last_completed_research, "Advanced Drilling")) {
+                        try ui.println("Your drilling equipment is now 15% more efficient.", .white, .normal);
+                        try ui.println("This will increase your extraction rates across all fields.", .white, .normal);
+                    } else if (std.mem.eql(u8, game.market.last_completed_research, "Environmental Protection")) {
+                        try ui.println("Your company has implemented cutting-edge environmental protection systems.", .white, .normal);
+                        try ui.println("Your reputation has increased by 15%.", .white, .normal);
+                    } else if (std.mem.eql(u8, game.market.last_completed_research, "Oil Quality Analysis")) {
+                        try ui.println("Your geologists can now better identify high-quality oil fields.", .white, .normal);
+                        try ui.println("New fields with higher quality have become available for purchase.", .white, .normal);
+                    } else if (std.mem.eql(u8, game.market.last_completed_research, "Deep Sea Drilling")) {
+                        try ui.println("Your company can now access valuable offshore oil fields.", .white, .normal);
+                        try ui.println("New offshore fields have become available for purchase.", .white, .normal);
+                    } else if (std.mem.eql(u8, game.market.last_completed_research, "Automated Extraction")) {
+                        try ui.println("Automation systems have been deployed across all your facilities.", .white, .normal);
+                        try ui.println("Operating costs have been reduced by 20%.", .white, .normal);
+                    } else if (std.mem.eql(u8, game.market.last_completed_research, "Market Prediction AI")) {
+                        try ui.println("Your trading desk now uses advanced AI to predict market shifts.", .white, .normal);
+                        try ui.println("You'll now receive advance warning about market changes.", .white, .normal);
+                    }
+                    
+                    try ui.println("\nPress Enter to continue...", .white, .normal);
+                    
+                    var buf: [10]u8 = undefined;
+                    _ = try ui.stdout.context.reader().readUntilDelimiterOrEof(&buf, '\n');
+                    
+                    // Reset the flag
+                    game.market.research_completed = false;
+                }
             }
             
             accumulator -= FIXED_TIMESTEP;
@@ -176,6 +252,33 @@ fn renderGameState(
 ) !void {
     try ui.clear();
     try ui.drawTitle("TURMOIL: Tycoon Mode");
+    
+    // Show current strategy if active
+    if (game.active_strategy) |strategy| {
+        try ui.print("Strategy: ", .white, .normal);
+        try ui.println(strategy.name, strategy.getColor(), .bold);
+        
+        // Show special ability status
+        try ui.print("Special Ability: ", .white, .normal);
+        if (strategy.current_cooldown > 0) {
+            try ui.println(try std.fmt.allocPrint(ui.allocator, "On Cooldown ({d} days)", .{strategy.current_cooldown}), .yellow, .normal);
+        } else {
+            try ui.println("Ready to Use!", .bright_green, .bold);
+        }
+    } else {
+        try ui.println("No corporate strategy selected. Choose a strategy to gain bonuses.", .yellow, .italic);
+    }
+    
+    // Active effects
+    if (game.tech_boost_days > 0) {
+        try ui.println(try std.fmt.allocPrint(ui.allocator, "Tech Boost Active: {d} days remaining", .{game.tech_boost_days}), .bright_cyan, .bold);
+    }
+    
+    if (game.crisis_management_days > 0) {
+        try ui.println(try std.fmt.allocPrint(ui.allocator, "Crisis Management Active: {d} days remaining", .{game.crisis_management_days}), .bright_magenta, .bold);
+    }
+    
+    try ui.drawDefaultHorizontalLine();
     
     // Show game state
     try ui.println("Company Status:", .bright_cyan, .bold);
@@ -275,7 +378,10 @@ fn renderGameState(
         try ui.println("You don't own any oil fields yet. Consider purchasing one.", .yellow, .italic);
     } else {
         for (game.oil_fields.items, 0..) |field, i| {
-            try ui.print(try std.fmt.allocPrint(ui.allocator, "Field {d}: ", .{i + 1}), .white, .bold);
+            // Indicate if field is offshore
+            const field_type = if (field.is_offshore) "Offshore" else "Onshore";
+            
+            try ui.print(try std.fmt.allocPrint(ui.allocator, "Field {d} ({s}): ", .{i + 1, field_type}), .white, .bold);
             try ui.println(try std.fmt.allocPrint(ui.allocator, "{d:.1}% full, extracting {d:.1} barrels/day", 
                 .{field.getPercentageFull() * 100.0, field.extraction_rate * field.quality}), .bright_white, .normal);
         }
@@ -289,8 +395,9 @@ fn renderGameState(
         for (game.available_fields.items, 0..) |field, i| {
             const field_size = if (field.max_capacity < 5000.0) "Small" else if (field.max_capacity < 10000.0) "Medium" else "Large";
             const field_quality = if (field.quality < 0.8) "Low" else if (field.quality < 1.1) "Average" else "High";
+            const field_type = if (field.is_offshore) "Offshore" else "Onshore";
             
-            try ui.print(try std.fmt.allocPrint(ui.allocator, "Field {d}: ", .{i + 1}), .white, .bold);
+            try ui.print(try std.fmt.allocPrint(ui.allocator, "Field {d} ({s}): ", .{i + 1, field_type}), .white, .bold);
             try ui.println(try std.fmt.allocPrint(ui.allocator, "{s}, {s} quality, {d:.1} barrels capacity", 
                 .{field_size, field_quality, field.max_capacity}), .bright_white, .normal);
         }
@@ -302,7 +409,9 @@ fn renderGameState(
         "Advance Day",
         "Purchase Oil Field",
         "Upgrade Department",
-        "Start Research Project",
+        "Research Projects",
+        "Corporate Strategy", // New option
+        "Activate Special Ability", // New option
         "View Market Details",
         "View Detailed Reports",
         "Quit Game",
@@ -717,6 +826,249 @@ fn displayPriceChart(game: *tycoon_mode.TycoonMode, ui: *terminal_ui.TerminalUI)
     
     // Draw legend
     try ui.println("     ← Time (Past {d} days) →", .{@min(history.len, chart_width)}, .white, .italic);
+}
+
+/// Display the strategy selection screen where player can choose their corporate strategy
+fn displayStrategySelection(game: *tycoon_mode.TycoonMode, ui: *terminal_ui.TerminalUI) !void {
+    try ui.clear();
+    try ui.drawTitle("Choose Your Corporate Strategy", .bright_magenta);
+    
+    try ui.println("Select a corporate strategy that defines your company's focus and provides unique bonuses.", .white, .normal);
+    try ui.println("Each strategy offers different advantages and a special ability you can activate periodically.", .white, .normal);
+    try ui.stdout.print("\n", .{});
+    
+    // Display each strategy with its bonuses
+    for (game.available_strategies, 0..) |strategy, i| {
+        const is_active = if (game.active_strategy) |active| 
+            std.mem.eql(u8, active.name, strategy.name)
+        else 
+            false;
+        
+        const strategy_color = strategy.getColor();
+        
+        // Show number and name
+        try ui.print(try std.fmt.allocPrint(ui.allocator, "{d}. ", .{i + 1}), .bright_white, .bold);
+        
+        if (is_active) {
+            try ui.print("► ", .bright_green, .bold);
+        } else {
+            try ui.print("  ", .white, .normal);
+        }
+        
+        try ui.println(strategy.name, strategy_color, .bold);
+        
+        // Show description
+        try ui.println(try std.fmt.allocPrint(ui.allocator, "   {s}", .{strategy.description}), .white, .normal);
+        
+        // Show special ability
+        try ui.print("   Special Ability: ", .yellow, .bold);
+        try ui.println(strategy.special_ability.getDescription(), .bright_yellow, .normal);
+        
+        // Show bonuses
+        try ui.println("   Bonuses:", .bright_cyan, .normal);
+        for (strategy.bonuses) |bonus| {
+            try ui.println(try std.fmt.allocPrint(ui.allocator, "    • {s}", .{bonus}), .cyan, .normal);
+        }
+        
+        try ui.drawDefaultHorizontalLine();
+    }
+    
+    // Instructions
+    try ui.println("Enter strategy number to select (or 0 to cancel): ", .white, .normal);
+    
+    var buf: [10]u8 = undefined;
+    if (try ui.stdout.context.reader().readUntilDelimiterOrEof(&buf, '\n')) |input| {
+        const choice = std.fmt.parseInt(usize, std.mem.trim(u8, input, &std.ascii.whitespace), 10) catch 0;
+        
+        if (choice > 0 and choice <= game.available_strategies.len) {
+            // Set the active strategy
+            game.active_strategy = &game.available_strategies[choice - 1];
+            
+            try ui.clear();
+            try ui.drawTitle("Strategy Selected", .bright_green);
+            try ui.println(try std.fmt.allocPrint(ui.allocator, "You've adopted the {s} strategy!", .{game.active_strategy.?.name}), .bright_green, .bold);
+            try ui.println(game.active_strategy.?.description, .white, .normal);
+            try ui.println("\nYour company will now operate according to this strategic direction.", .white, .italic);
+            try ui.println("\nPress Enter to continue...", .white, .normal);
+            _ = try ui.stdout.context.reader().readUntilDelimiterOrEof(&buf, '\n');
+            return;
+        }
+    }
+}
+
+/// Display the special ability activation screen
+fn displaySpecialAbility(game: *tycoon_mode.TycoonMode, ui: *terminal_ui.TerminalUI) !void {
+    if (game.active_strategy == null) {
+        try ui.clear();
+        try ui.drawTitle("No Active Strategy", .bright_red);
+        try ui.println("You need to select a corporate strategy before you can use special abilities.", .white, .normal);
+        try ui.println("\nPress Enter to continue...", .white, .normal);
+        
+        var buf: [10]u8 = undefined;
+        _ = try ui.stdout.context.reader().readUntilDelimiterOrEof(&buf, '\n');
+        return;
+    }
+    
+    const strategy = game.active_strategy.?;
+    
+    try ui.clear();
+    try ui.drawTitle("Activate Special Ability", strategy.getColor());
+    
+    try ui.print("Your Strategy: ", .white, .normal);
+    try ui.println(strategy.name, strategy.getColor(), .bold);
+    
+    try ui.print("Special Ability: ", .white, .normal);
+    try ui.println(strategy.special_ability.getDescription(), .bright_yellow, .bold);
+    
+    if (strategy.current_cooldown > 0) {
+        try ui.println(try std.fmt.allocPrint(ui.allocator, "\nThis ability is on cooldown for {d} more days.", .{strategy.current_cooldown}), .red, .normal);
+        try ui.println("\nPress Enter to continue...", .white, .normal);
+        
+        var buf: [10]u8 = undefined;
+        _ = try ui.stdout.context.reader().readUntilDelimiterOrEof(&buf, '\n');
+        return;
+    }
+    
+    try ui.println("\nDo you want to activate this special ability now? (y/n)", .white, .bold);
+    
+    var buf: [10]u8 = undefined;
+    if (try ui.stdout.context.reader().readUntilDelimiterOrEof(&buf, '\n')) |input| {
+        if (input.len > 0 and (input[0] == 'y' or input[0] == 'Y')) {
+            const success = try strategy.activateSpecialAbility(game);
+            
+            try ui.clear();
+            if (success) {
+                try ui.drawTitle("Ability Activated", .bright_green);
+                
+                switch (strategy.special_ability) {
+                    .market_manipulation => {
+                        try ui.println("You've manipulated the oil market to your advantage!", .bright_green, .bold);
+                        try ui.println("For the next 5 days, oil prices will be influenced in your favor.", .white, .normal);
+                    },
+                    .technological_breakthrough => {
+                        try ui.println("Your R&D team has achieved a technological breakthrough!", .bright_green, .bold);
+                        try ui.println("Research progress will be doubled for the next 10 days.", .white, .normal);
+                    },
+                    .aggressive_acquisition => {
+                        try ui.println("Your company has executed a hostile takeover!", .bright_green, .bold);
+                        try ui.println("You've acquired assets from a competitor, strengthening your position.", .white, .normal);
+                    },
+                    .reputation_campaign => {
+                        try ui.println("Your PR campaign has significantly improved your reputation!", .bright_green, .bold);
+                        try ui.println("Your company's public image has been enhanced and will help in future negotiations.", .white, .normal);
+                    },
+                    .crisis_management => {
+                        try ui.println("You've activated your crisis management protocols!", .bright_green, .bold);
+                        try ui.println("For the next 10 days, the impact of negative events will be reduced by 50%.", .white, .normal);
+                    },
+                }
+                
+                try ui.println(try std.fmt.allocPrint(ui.allocator, "\nThis ability will be on cooldown for {d} days.", .{strategy.cooldown_days}), .yellow, .normal);
+            } else {
+                try ui.drawTitle("Ability Failed", .bright_red);
+                try ui.println("The special ability could not be activated.", .red, .bold);
+                
+                switch (strategy.special_ability) {
+                    .market_manipulation => {
+                        try ui.println("Your attempt to manipulate the market was unsuccessful.", .white, .normal);
+                    },
+                    .technological_breakthrough => {
+                        try ui.println("Your research team couldn't achieve the breakthrough.", .white, .normal);
+                    },
+                    .aggressive_acquisition => {
+                        try ui.println("The hostile takeover attempt failed. You lacked sufficient funds or suitable targets.", .white, .normal);
+                    },
+                    .reputation_campaign => {
+                        try ui.println("The PR campaign didn't gain traction with the public.", .white, .normal);
+                    },
+                    .crisis_management => {
+                        try ui.println("Your crisis management team couldn't be mobilized effectively.", .white, .normal);
+                    },
+                }
+            }
+            
+            try ui.println("\nPress Enter to continue...", .white, .normal);
+            _ = try ui.stdout.context.reader().readUntilDelimiterOrEof(&buf, '\n');
+        }
+    }
+}
+
+/// Display a decision event to the player and get their choice
+fn displayDecisionEvent(game: *tycoon_mode.TycoonMode, ui: *terminal_ui.TerminalUI) !void {
+    if (game.market.current_decision == null or !game.market.decision_pending) {
+        return;
+    }
+    
+    const decision = game.market.current_decision.?;
+    
+    try ui.clear();
+    try ui.drawTitle(decision.title, .bright_magenta);
+    
+    // Display the decision description
+    try ui.println(decision.description, .white, .normal);
+    try ui.stdout.print("\n", .{});
+    
+    // Display choices
+    try ui.println("Your options:", .bright_cyan, .bold);
+    
+    for (decision.choices, 0..) |choice, i| {
+        try ui.print(try std.fmt.allocPrint(ui.allocator, "{d}. ", .{i + 1}), .bright_white, .bold);
+        try ui.println(choice.text, .white, .normal);
+        
+        // Show impacts
+        var has_impact = false;
+        if (choice.money_impact != 0.0) {
+            const color: terminal_ui.TextColor = if (choice.money_impact > 0) .bright_green else .bright_red;
+            try ui.print("   Money: ", .white, .normal);
+            try ui.println(try std.fmt.allocPrint(ui.allocator, "${d:.2}", .{choice.money_impact}), color, .normal);
+            has_impact = true;
+        }
+        
+        if (choice.reputation_impact != 0.0) {
+            const color: terminal_ui.TextColor = if (choice.reputation_impact > 0) .bright_green else .bright_red;
+            try ui.print("   Reputation: ", .white, .normal);
+            try ui.println(try std.fmt.allocPrint(ui.allocator, "{d:.1}%", .{choice.reputation_impact * 100.0}), color, .normal);
+            has_impact = true;
+        }
+        
+        if (choice.production_impact != 0.0) {
+            const color: terminal_ui.TextColor = if (choice.production_impact > 0) .bright_green else .bright_red;
+            try ui.print("   Production: ", .white, .normal);
+            try ui.println(try std.fmt.allocPrint(ui.allocator, "{d:.1}%", .{choice.production_impact * 100.0}), color, .normal);
+            has_impact = true;
+        }
+        
+        if (choice.special_effect) |effect| {
+            try ui.print("   Special Effect: ", .bright_yellow, .normal);
+            try ui.println(effect.getDescription(), .yellow, .normal);
+            has_impact = true;
+        }
+        
+        if (!has_impact) {
+            try ui.println("   No immediate effects", .yellow, .italic);
+        }
+        
+        try ui.drawDefaultHorizontalLine();
+    }
+    
+    try ui.println("Enter your choice (1-3): ", .white, .normal);
+    
+    var buf: [10]u8 = undefined;
+    if (try ui.stdout.context.reader().readUntilDelimiterOrEof(&buf, '\n')) |input| {
+        const choice = std.fmt.parseInt(usize, std.mem.trim(u8, input, &std.ascii.whitespace), 10) catch 0;
+        
+        if (choice >= 1 and choice <= 3) {
+            // Apply the selected choice
+            game.market.applyDecisionChoice(game, choice - 1);
+            
+            try ui.clear();
+            try ui.drawTitle("Decision Made", .bright_green);
+            try ui.println("Your choice has been implemented. The consequences will unfold over time.", .white, .normal);
+            
+            try ui.println("\nPress Enter to continue...", .white, .normal);
+            _ = try ui.stdout.context.reader().readUntilDelimiterOrEof(&buf, '\n');
+        }
+    }
 }
 
 // More helper functions would be added here in a full implementation 
