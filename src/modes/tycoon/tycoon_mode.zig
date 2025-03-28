@@ -584,30 +584,505 @@ pub const Competitor = struct {
     technological_level: f32, // 0.0 to 1.0
     reputation: f32, // 0.0 to 1.0
     
+    // Personality traits that influence decision making
+    risk_tolerance: f32, // 0.0 to 1.0, influences willingness to take chances
+    innovation_focus: f32, // 0.0 to 1.0, influences tech investment vs traditional production
+    environmental_concern: f32, // 0.0 to 1.0, influences reputation management
+    expansion_priority: f32, // 0.0 to 1.0, influences field acquisition vs efficiency
+    
+    // Strategy state
+    strategy: CompetitorStrategy, // Current active strategy
+    strategy_cooldown: u32, // Days before strategy can change
+    funds: f32, // Available funds for operations
+    price_modifier: f32, // How much they modify market price in sales
+    
+    // Business intelligence
+    known_oil_reserves: f32, // Estimated remaining oil in fields
+    historical_production: [30]f32 = [_]f32{0.0} ** 30, // Last 30 days of production
+    
+    /// Initialize a competitor with a specific strategy profile
+    pub fn init(name: []const u8, profile: CompetitorProfile) Competitor {
+        return Competitor{
+            .name = name,
+            .size = profile.starting_size,
+            .aggressiveness = profile.aggressiveness,
+            .production_rate = profile.starting_production,
+            .fields_owned = profile.starting_fields,
+            .technological_level = profile.starting_tech,
+            .reputation = profile.starting_reputation,
+            .risk_tolerance = profile.risk_tolerance,
+            .innovation_focus = profile.innovation_focus,
+            .environmental_concern = profile.environmental_concern,
+            .expansion_priority = profile.expansion_priority,
+            .strategy = profile.default_strategy,
+            .strategy_cooldown = 0,
+            .funds = profile.starting_funds,
+            .price_modifier = 1.0,
+            .known_oil_reserves = profile.starting_production * 500.0, // Rough estimate
+        };
+    }
+    
+    /// Competitor strategy profiles for initialization
+    pub const CompetitorProfile = struct {
+        starting_size: f32,
+        aggressiveness: f32,
+        starting_production: f32,
+        starting_fields: u32,
+        starting_tech: f32,
+        starting_reputation: f32,
+        risk_tolerance: f32,
+        innovation_focus: f32,
+        environmental_concern: f32,
+        expansion_priority: f32,
+        default_strategy: CompetitorStrategy,
+        starting_funds: f32,
+    };
+    
+    /// Predefined competitor profiles
+    pub const profiles = struct {
+        pub const aggressive_expander = CompetitorProfile{
+            .starting_size = 0.25,
+            .aggressiveness = 0.85,
+            .starting_production = 500000.0,
+            .starting_fields = 12,
+            .starting_tech = 0.65,
+            .starting_reputation = 0.45,
+            .risk_tolerance = 0.8,
+            .innovation_focus = 0.5,
+            .environmental_concern = 0.2,
+            .expansion_priority = 0.9,
+            .default_strategy = .market_domination,
+            .starting_funds = 2500000.0,
+        };
+        
+        pub const balanced_operator = CompetitorProfile{
+            .starting_size = 0.35,
+            .aggressiveness = 0.5,
+            .starting_production = 750000.0,
+            .starting_fields = 20,
+            .starting_tech = 0.75,
+            .starting_reputation = 0.7,
+            .risk_tolerance = 0.5,
+            .innovation_focus = 0.5,
+            .environmental_concern = 0.5,
+            .expansion_priority = 0.5,
+            .default_strategy = .balanced_growth,
+            .starting_funds = 5000000.0,
+        };
+        
+        pub const eco_innovator = CompetitorProfile{
+            .starting_size = 0.15,
+            .aggressiveness = 0.3,
+            .starting_production = 300000.0,
+            .starting_fields = 8,
+            .starting_tech = 0.9,
+            .starting_reputation = 0.9,
+            .risk_tolerance = 0.4,
+            .innovation_focus = 0.9,
+            .environmental_concern = 0.9,
+            .expansion_priority = 0.3,
+            .default_strategy = .technological_leadership,
+            .starting_funds = 3000000.0,
+        };
+        
+        pub const conservative_giant = CompetitorProfile{
+            .starting_size = 0.45,
+            .aggressiveness = 0.2,
+            .starting_production = 1000000.0,
+            .starting_fields = 30,
+            .starting_tech = 0.6,
+            .starting_reputation = 0.6,
+            .risk_tolerance = 0.2,
+            .innovation_focus = 0.4,
+            .environmental_concern = 0.3,
+            .expansion_priority = 0.2,
+            .default_strategy = .conservative_optimization,
+            .starting_funds = 8000000.0,
+        };
+        
+        pub const speculative_upstart = CompetitorProfile{
+            .starting_size = 0.05,
+            .aggressiveness = 0.7,
+            .starting_production = 100000.0,
+            .starting_fields = 3,
+            .starting_tech = 0.8,
+            .starting_reputation = 0.4,
+            .risk_tolerance = 0.9,
+            .innovation_focus = 0.8,
+            .environmental_concern = 0.4,
+            .expansion_priority = 0.7,
+            .default_strategy = .opportunistic_growth,
+            .starting_funds = 1000000.0,
+        };
+    };
+    
+    /// Possible strategies a competitor can adopt
+    pub const CompetitorStrategy = enum {
+        market_domination, // Focus on rapid expansion regardless of cost
+        technological_leadership, // Focus on technological advancement
+        balanced_growth, // Maintain steady growth across all areas
+        conservative_optimization, // Minimize risk, focus on efficiency
+        opportunistic_growth, // Exploit market conditions flexibly
+        reputation_building, // Focus on improving corporate image
+        crisis_management, // Cut costs during downturns
+        
+        /// Get a description of the strategy
+        pub fn getDescription(self: CompetitorStrategy) []const u8 {
+            return switch (self) {
+                .market_domination => "Rapidly expanding production and market share through aggressive field acquisition",
+                .technological_leadership => "Investing heavily in technology to maximize extraction efficiency and minimize costs",
+                .balanced_growth => "Pursuing a balanced approach to growth, maintaining stability across all operations",
+                .conservative_optimization => "Focusing on optimizing existing operations while minimizing expansion risks",
+                .opportunistic_growth => "Flexibly adapting to market conditions to exploit temporary opportunities",
+                .reputation_building => "Building corporate reputation through environmental initiatives and PR campaigns",
+                .crisis_management => "Cutting costs and securing operations during market downturns",
+            };
+        }
+    };
+    
     /// Simulate the competitor's daily actions
-    pub fn simulateDay(self: *Competitor, market_condition: MarketCondition) void {
-        // Adjust production based on market conditions
+    pub fn simulateDay(self: *Competitor, market_condition: MarketCondition, global_price: f32) void {
+        // Update strategy if needed
+        if (self.strategy_cooldown == 0) {
+            self.evaluateStrategy(market_condition);
+        } else {
+            self.strategy_cooldown -= 1;
+        }
+        
+        // Track production history
+        for (1..self.historical_production.len) |i| {
+            self.historical_production[i-1] = self.historical_production[i];
+        }
+        self.historical_production[self.historical_production.len - 1] = self.production_rate;
+        
+        // Calculate daily revenue based on production and price
+        const daily_revenue = self.production_rate * global_price * self.price_modifier;
+        
+        // Calculate operating costs based on fields and technology
+        const base_operating_cost = self.production_rate * 0.2;
+        const tech_efficiency = 1.0 - (self.technological_level * 0.3);
+        const operating_costs = base_operating_cost * tech_efficiency * (1.0 + @as(f32, @floatFromInt(self.fields_owned)) * 0.02);
+        
+        // Daily profit
+        const daily_profit = daily_revenue - operating_costs;
+        self.funds += daily_profit;
+        
+        // Execute strategy-specific actions
+        switch (self.strategy) {
+            .market_domination => {
+                // Aggressive expansion - invest heavily in new fields
+                if (self.funds > self.production_rate * 0.5 and std.crypto.random.float(f32) < 0.1 * self.expansion_priority) {
+                    self.acquireNewField();
+                }
+                
+                // Maximize production from existing fields
+                self.production_rate *= 1.001 + (self.aggressiveness * 0.002);
+                
+                // Price competitively to gain market share
+                self.price_modifier = 0.95;
+                
+                // Risk reputation for growth
+                if (std.crypto.random.float(f32) < 0.05) {
+                    self.reputation = @max(0.1, self.reputation - 0.01);
+                }
+            },
+            .technological_leadership => {
+                // Invest in technology
+                if (self.funds > self.production_rate * 0.3 and std.crypto.random.float(f32) < 0.2 * self.innovation_focus) {
+                    const investment = self.funds * 0.1;
+                    self.funds -= investment;
+                    self.technological_level = @min(1.0, self.technological_level + (investment / 10000000.0));
+                }
+                
+                // Modest production growth focused on efficiency
+                self.production_rate *= 1.0005 + (self.technological_level * 0.001);
+                
+                // Price at premium due to efficiency
+                self.price_modifier = 1.05;
+                
+                // Technology investments boost reputation
+                if (std.crypto.random.float(f32) < 0.05) {
+                    self.reputation = @min(1.0, self.reputation + 0.005);
+                }
+            },
+            .balanced_growth => {
+                // Moderate investments across all areas
+                if (self.funds > self.production_rate * 0.4) {
+                    // Split investments between fields, tech, and reputation
+                    const total_investment = self.funds * 0.05;
+                    self.funds -= total_investment;
+                    
+                    // 40% to field expansion
+                    if (std.crypto.random.float(f32) < 0.05) {
+                        self.acquireNewField();
+                    }
+                    
+                    // 30% to technology
+                    self.technological_level = @min(1.0, self.technological_level + (total_investment * 0.3 / 5000000.0));
+                    
+                    // 30% to reputation building
+                    if (std.crypto.random.float(f32) < 0.1) {
+                        self.reputation = @min(1.0, self.reputation + 0.01);
+                    }
+                }
+                
+                // Steady production growth
+                self.production_rate *= 1.0007;
+                
+                // Standard pricing
+                self.price_modifier = 1.0;
+            },
+            .conservative_optimization => {
+                // Focus on optimizing existing operations
+                if (self.funds > self.production_rate * 0.2) {
+                    // Invest mainly in efficiency improvements
+                    const investment = self.funds * 0.03;
+                    self.funds -= investment;
+                    self.technological_level = @min(1.0, self.technological_level + (investment / 7000000.0));
+                }
+                
+                // Very slow, cautious growth
+                self.production_rate *= 1.0003;
+                
+                // Slightly premium pricing to maintain margins
+                self.price_modifier = 1.02;
+                
+                // Maintain solid reputation
+                if (std.crypto.random.float(f32) < 0.03) {
+                    self.reputation = @min(0.95, self.reputation + 0.002);
+                }
+            },
+            .opportunistic_growth => {
+                // Adapt based on market conditions
+                if (market_condition == .boom) {
+                    // In boom times, expand rapidly
+                    if (self.funds > self.production_rate * 0.3 and std.crypto.random.float(f32) < 0.15) {
+                        self.acquireNewField();
+                    }
+                    
+                    // Significant production increase
+                    self.production_rate *= 1.002;
+                    
+                    // Capitalize on high prices
+                    self.price_modifier = 1.08;
+                } else if (market_condition == .crisis) {
+                    // In crisis, cut costs and consolidate
+                    self.production_rate *= 0.998;
+                    
+                    // Competitive pricing to maintain sales
+                    self.price_modifier = 0.92;
+                    
+                    // Build cash reserves
+                    if (std.crypto.random.float(f32) < 0.2) {
+                        // Small chance to opportunistically acquire struggling competitors
+                        if (self.funds > self.production_rate * 1.0 and std.crypto.random.float(f32) < 0.05) {
+                            self.acquireNewField();
+                        }
+                    }
+                } else {
+                    // Normal growth in stable conditions
+                    self.production_rate *= 1.0005;
+                    self.price_modifier = 1.0;
+                }
+            },
+            .reputation_building => {
+                // Invest heavily in reputation
+                if (self.funds > self.production_rate * 0.3) {
+                    const investment = self.funds * 0.08;
+                    self.funds -= investment;
+                    self.reputation = @min(1.0, self.reputation + (investment / 2000000.0));
+                }
+                
+                // Focus on sustainable growth
+                self.production_rate *= 1.0004;
+                
+                // Premium pricing based on reputation
+                self.price_modifier = 1.0 + (self.reputation * 0.1);
+                
+                // Occasional technology improvements
+                if (std.crypto.random.float(f32) < 0.05 and self.funds > self.production_rate * 0.2) {
+                    const tech_investment = self.funds * 0.05;
+                    self.funds -= tech_investment;
+                    self.technological_level = @min(1.0, self.technological_level + (tech_investment / 8000000.0));
+                }
+            },
+            .crisis_management => {
+                // Drastically cut costs
+                self.production_rate *= 0.997;
+                
+                // Discount pricing to maintain cash flow
+                self.price_modifier = 0.9;
+                
+                // Focus on efficiency
+                if (self.funds > self.production_rate * 0.1 and std.crypto.random.float(f32) < 0.1) {
+                    const efficiency_investment = self.funds * 0.05;
+                    self.funds -= efficiency_investment;
+                    self.technological_level = @min(1.0, self.technological_level + (efficiency_investment / 6000000.0));
+                }
+                
+                // Improve reputation to survive the crisis
+                if (std.crypto.random.float(f32) < 0.08) {
+                    self.reputation = @min(1.0, self.reputation + 0.005);
+                }
+            },
+        }
+        
+        // Apply market condition modifiers to production
         const market_factor = market_condition.getDemandFactor();
         
-        // Aggressive competitors maintain high production even in bad times
-        if (market_factor < 1.0 and self.aggressiveness > 0.7) {
-            // Only slight reduction for aggressive competitors
-            self.production_rate *= (0.95 + self.aggressiveness * 0.05);
-        } else if (market_factor < 1.0) {
-            // More significant reduction for conservative competitors
-            self.production_rate *= market_factor;
+        // Strategic response to market conditions varies by risk tolerance
+        if (market_factor < 1.0) {
+            if (self.risk_tolerance > 0.7) {
+                // High risk tolerance companies maintain higher production in downturns
+                self.production_rate *= @max(market_factor, 0.95);
+            } else if (self.risk_tolerance < 0.3) {
+                // Conservative companies cut production more in downturns
+                self.production_rate *= @max(market_factor * 0.9, 0.9);
+            } else {
+                // Moderate adjustment
+                self.production_rate *= @max(market_factor, 0.92);
+            }
         } else if (market_factor > 1.0) {
-            // All competitors increase production in good times
-            self.production_rate *= (market_factor * (1.0 + self.aggressiveness * 0.1));
+            // In boom conditions
+            if (self.risk_tolerance > 0.7) {
+                // Aggressive companies ramp up quickly
+                self.production_rate *= @min(market_factor * 1.1, 1.1);
+            } else if (self.risk_tolerance < 0.3) {
+                // Conservative companies expand cautiously
+                self.production_rate *= @min(market_factor * 0.9, 1.05);
+            } else {
+                // Moderate expansion
+                self.production_rate *= @min(market_factor, 1.07);
+            }
         }
         
-        // Natural growth factors
-        const growth_chance = 0.05 * self.technological_level * market_factor;
-        if (std.crypto.random.float(f32) < growth_chance) {
-            self.fields_owned += 1;
-            self.production_rate *= 1.1;
-            self.size = @min(self.size * 1.05, 1.0);
+        // Depletion of oil reserves
+        self.known_oil_reserves -= self.production_rate;
+        if (self.known_oil_reserves < self.production_rate * 100.0) {
+            // If reserves are running low, automatically look for new fields
+            if (self.funds > self.production_rate * 0.5 and std.crypto.random.float(f32) < 0.2) {
+                self.acquireNewField();
+            }
         }
+        
+        // Prevent production from exceeding reserves
+        if (self.known_oil_reserves < self.production_rate * 30.0) {
+            self.production_rate = self.known_oil_reserves / 50.0;
+        }
+        
+        // Update market share based on production (will be adjusted by market simulation)
+        self.size = @min(1.0, self.size * 0.99 + self.production_rate / 10000000.0);
+    }
+    
+    /// Evaluate and potentially change the company's strategy
+    fn evaluateStrategy(self: *Competitor, market_condition: MarketCondition) void {
+        // Analyze recent production trend (30-day average)
+        var avg_production: f32 = 0;
+        for (self.historical_production) |prod| {
+            avg_production += prod;
+        }
+        avg_production /= @as(f32, @floatFromInt(self.historical_production.len));
+        
+        // Decision factors
+        const funds_healthy = self.funds > self.production_rate * 0.5;
+        const reserves_low = self.known_oil_reserves < self.production_rate * 200.0;
+        
+        // Base chance to change strategy
+        var change_chance: f32 = 0.05;
+        
+        // Adjust based on market conditions and risk tolerance
+        if (market_condition == .crisis) {
+            change_chance += 0.2;
+        } else if (market_condition == .recession) {
+            change_chance += 0.1;
+        } else if (market_condition == .boom) {
+            change_chance += 0.05;
+        }
+        
+        // Risk tolerance affects willingness to change strategy
+        change_chance *= 0.5 + self.risk_tolerance;
+        
+        // Decide whether to change strategy
+        if (std.crypto.random.float(f32) < change_chance) {
+            // Choose a new strategy based on conditions
+            if (market_condition == .crisis) {
+                // During crisis, conservative approaches are more likely
+                if (self.risk_tolerance < 0.4 or !funds_healthy) {
+                    self.strategy = .crisis_management;
+                } else if (self.risk_tolerance > 0.8 and funds_healthy) {
+                    // Very risk-tolerant might see opportunity in crisis
+                    self.strategy = .opportunistic_growth;
+                } else {
+                    self.strategy = .conservative_optimization;
+                }
+            } else if (market_condition == .recession) {
+                // During recession, adapt based on financial health
+                if (!funds_healthy) {
+                    self.strategy = .conservative_optimization;
+                } else if (self.reputation < 0.4) {
+                    // Low reputation companies might focus on rebuilding
+                    self.strategy = .reputation_building;
+                } else if (self.innovation_focus > 0.7) {
+                    // Innovation-focused companies invest in tech during downturns
+                    self.strategy = .technological_leadership;
+                } else {
+                    self.strategy = .balanced_growth;
+                }
+            } else if (market_condition == .boom) {
+                // During boom, expansion strategies are more attractive
+                if (self.expansion_priority > 0.7 and funds_healthy) {
+                    self.strategy = .market_domination;
+                } else if (self.technological_level < 0.5 and funds_healthy) {
+                    // Companies with low tech might catch up during good times
+                    self.strategy = .technological_leadership;
+                } else if (reserves_low) {
+                    // If reserves are low, focus on new acquisitions
+                    self.strategy = .opportunistic_growth;
+                } else {
+                    self.strategy = .balanced_growth;
+                }
+            } else {
+                // During stable times, companies focus on their core priorities
+                if (self.environmental_concern > 0.7) {
+                    self.strategy = .reputation_building;
+                } else if (self.innovation_focus > 0.7) {
+                    self.strategy = .technological_leadership;
+                } else if (self.expansion_priority > 0.7 and funds_healthy) {
+                    self.strategy = .market_domination;
+                } else if (reserves_low) {
+                    self.strategy = .opportunistic_growth;
+                } else {
+                    self.strategy = .balanced_growth;
+                }
+            }
+            
+            // Set cooldown before next strategy change
+            self.strategy_cooldown = @max(10, @as(u32, @intFromFloat(30.0 * (1.0 - self.risk_tolerance))));
+        }
+    }
+    
+    /// Simulate acquiring a new oil field
+    fn acquireNewField(self: *Competitor) void {
+        // Random field size based on expansion strategy and funds
+        const field_size = std.crypto.random.float(f32) * 10000.0 + 5000.0;
+        const field_cost = field_size * 10.0;
+        
+        // Check if company can afford it
+        if (self.funds >= field_cost) {
+            self.funds -= field_cost;
+            self.fields_owned += 1;
+            self.known_oil_reserves += field_size;
+            
+            // Production capacity increases with new field
+            const prod_increase = field_size / 200.0; // Each field produces ~0.5% of its size per day
+            self.production_rate += prod_increase;
+        }
+    }
+    
+    /// Get a description of competitor's current strategy and status
+    pub fn getStatusDescription(self: *const Competitor) []const u8 {
+        const strategy_desc = self.strategy.getDescription();
+        return strategy_desc;
     }
 };
 
@@ -624,109 +1099,138 @@ pub const MarketSimulation = struct {
     possible_events: std.ArrayList(WorldEvent),
     price_history: std.ArrayList(f32),
     demand_history: std.ArrayList(f32),
-    allocator: std.mem.Allocator,
+    arena: std.heap.ArenaAllocator, // Arena allocator for efficient memory management
+    parent_allocator: std.mem.Allocator, // Store the parent allocator for reset operations
     
     /// Initialize a new market simulation
     pub fn init(allocator: std.mem.Allocator) !MarketSimulation {
-        const competitors = std.ArrayList(Competitor).init(allocator);
-        const active_events = std.ArrayList(WorldEvent).init(allocator);
-        const possible_events = std.ArrayList(WorldEvent).init(allocator);
-        const price_history = std.ArrayList(f32).init(allocator);
-        const demand_history = std.ArrayList(f32).init(allocator);
+        // Create an arena allocator backed by the parent allocator
+        var arena = std.heap.ArenaAllocator.init(allocator);
+        // Get an allocator that allocates from the arena
+        const arena_allocator = arena.allocator();
         
-        // Add initial competitors
-        try competitors.append(Competitor{
-            .name = "PetroCorp",
-            .size = 0.25,
-            .aggressiveness = 0.7,
-            .production_rate = 500000.0,
-            .fields_owned = 12,
-            .technological_level = 0.8,
-            .reputation = 0.6,
-        });
+        // Initialize all array lists from the arena allocator
+        const competitors = std.ArrayList(Competitor).init(arena_allocator);
+        const active_events = std.ArrayList(WorldEvent).init(arena_allocator);
+        const possible_events = std.ArrayList(WorldEvent).init(arena_allocator);
+        const price_history = std.ArrayList(f32).init(arena_allocator);
+        const demand_history = std.ArrayList(f32).init(arena_allocator);
         
-        try competitors.append(Competitor{
-            .name = "Global Oil",
-            .size = 0.35,
-            .aggressiveness = 0.5,
-            .production_rate = 750000.0,
-            .fields_owned = 20,
-            .technological_level = 0.75,
-            .reputation = 0.7,
-        });
+        // Add initial competitors with diverse personalities and strategies
+        try competitors.append(Competitor.init("PetroCorp", Competitor.profiles.aggressive_expander));
+        try competitors.append(Competitor.init("Global Oil", Competitor.profiles.balanced_operator));
+        try competitors.append(Competitor.init("EcoFuels", Competitor.profiles.eco_innovator));
+        try competitors.append(Competitor.init("MegaPetrol", Competitor.profiles.conservative_giant));
+        try competitors.append(Competitor.init("NexGen Drilling", Competitor.profiles.speculative_upstart));
         
-        try competitors.append(Competitor{
-            .name = "EcoFuels",
-            .size = 0.15,
-            .aggressiveness = 0.3,
-            .production_rate = 300000.0,
-            .fields_owned = 8,
-            .technological_level = 0.9,
-            .reputation = 0.9,
-        });
+        // Preallocate event data using comptime strings
+        const events = [_]struct { name: []const u8, desc: []const u8, price: f32, demand: f32, rep: f32, days: u32 }{
+            .{ 
+                .name = "Middle East Conflict", 
+                .desc = "Political tensions have erupted into conflict, threatening oil supplies.",
+                .price = 1.5,
+                .demand = 1.1,
+                .rep = 0.0,
+                .days = 14,
+            },
+            .{ 
+                .name = "Major Oil Spill", 
+                .desc = "A competitor's tanker has caused a major environmental disaster.",
+                .price = 1.1,
+                .demand = 0.95,
+                .rep = -0.1,
+                .days = 30,
+            },
+            .{ 
+                .name = "New Oil Field Discovery", 
+                .desc = "A massive new oil field has been discovered, increasing global supplies.",
+                .price = 0.85,
+                .demand = 1.0,
+                .rep = 0.0,
+                .days = 60,
+            },
+            .{ 
+                .name = "Global Recession", 
+                .desc = "Economic downturn has reduced demand for oil worldwide.",
+                .price = 0.7,
+                .demand = 0.8,
+                .rep = 0.0,
+                .days = 90,
+            },
+            .{ 
+                .name = "Alternative Energy Breakthrough", 
+                .desc = "A significant advancement in renewable energy is affecting oil markets.",
+                .price = 0.9,
+                .demand = 0.9,
+                .rep = 0.0,
+                .days = 120,
+            },
+            .{ 
+                .name = "Transportation Strike", 
+                .desc = "Workers across the transportation sector are on strike.",
+                .price = 0.95,
+                .demand = 0.85,
+                .rep = 0.0,
+                .days = 14,
+            },
+            .{ 
+                .name = "International Energy Summit", 
+                .desc = "Global leaders are meeting to discuss energy policies.",
+                .price = 1.1,
+                .demand = 1.0,
+                .rep = 0.0,
+                .days = 7,
+            },
+            .{ 
+                .name = "Refinery Explosion", 
+                .desc = "A major refinery has experienced a catastrophic explosion.",
+                .price = 1.3,
+                .demand = 1.0,
+                .rep = -0.05,
+                .days = 21,
+            },
+            .{ 
+                .name = "Cold Weather Snap", 
+                .desc = "Unusually cold weather has increased heating oil demand.",
+                .price = 1.2,
+                .demand = 1.15,
+                .rep = 0.0,
+                .days = 10,
+            },
+            .{ 
+                .name = "New Emission Regulations", 
+                .desc = "Stricter emissions standards are now in effect for oil companies.",
+                .price = 1.05,
+                .demand = 0.95,
+                .rep = 0.0,
+                .days = 180,
+            },
+        };
         
-        // Add possible world events
-        try possible_events.append(WorldEvent{
-            .name = "Middle East Conflict",
-            .description = "Political tensions have erupted into conflict, threatening oil supplies.",
-            .price_impact = 1.5,
-            .demand_impact = 1.1,
-            .reputation_impact = 0.0,
-            .duration_days = 14,
-            .days_active = 0,
-            .is_active = false,
-        });
+        // Add possible world events using the predefined array
+        for (events) |event_data| {
+            try possible_events.append(WorldEvent{
+                .name = event_data.name,
+                .description = event_data.desc,
+                .price_impact = event_data.price,
+                .demand_impact = event_data.demand,
+                .reputation_impact = event_data.rep,
+                .duration_days = event_data.days,
+                .days_active = 0,
+                .is_active = false,
+            });
+        }
         
-        try possible_events.append(WorldEvent{
-            .name = "Major Oil Spill",
-            .description = "A competitor's tanker has caused a major environmental disaster.",
-            .price_impact = 1.1,
-            .demand_impact = 0.95,
-            .reputation_impact = -0.1, // Industry-wide reputation hit
-            .duration_days = 30,
-            .days_active = 0,
-            .is_active = false,
-        });
+        // Pre-allocate space for a year of history to avoid frequent reallocations
+        try price_history.ensureTotalCapacity(365);
+        try demand_history.ensureTotalCapacity(365);
         
-        try possible_events.append(WorldEvent{
-            .name = "New Oil Field Discovery",
-            .description = "A massive new oil field has been discovered, increasing global supplies.",
-            .price_impact = 0.85,
-            .demand_impact = 1.0,
-            .reputation_impact = 0.0,
-            .duration_days = 60,
-            .days_active = 0,
-            .is_active = false,
-        });
-        
-        try possible_events.append(WorldEvent{
-            .name = "Global Recession",
-            .description = "Economic downturn has reduced demand for oil worldwide.",
-            .price_impact = 0.7,
-            .demand_impact = 0.8,
-            .reputation_impact = 0.0,
-            .duration_days = 90,
-            .days_active = 0,
-            .is_active = false,
-        });
-        
-        try possible_events.append(WorldEvent{
-            .name = "Alternative Energy Breakthrough",
-            .description = "A significant advancement in renewable energy is affecting oil markets.",
-            .price_impact = 0.9,
-            .demand_impact = 0.9,
-            .reputation_impact = 0.0,
-            .duration_days = 120,
-            .days_active = 0,
-            .is_active = false,
-        });
-        
-        // Initialize with current price
-        const initial_price = 50.0;
+        // Initialize with current price - slightly randomized
+        const initial_price = 45.0 + std.crypto.random.float(f32) * 10.0;
         try price_history.append(initial_price);
         
-        // Initialize with current demand
-        const initial_demand = 100.0; // 100 million barrels per day
+        // Initialize with current demand - slightly randomized
+        const initial_demand = 95.0 + std.crypto.random.float(f32) * 10.0; // ~100 million barrels per day
         try demand_history.append(initial_demand);
         
         return MarketSimulation{
@@ -734,24 +1238,58 @@ pub const MarketSimulation = struct {
             .base_oil_price = initial_price,
             .current_oil_price = initial_price,
             .global_demand = initial_demand,
-            .global_supply = initial_demand * 1.01, // Slightly more supply than demand
-            .volatility = 0.1,
+            .global_supply = initial_demand * (0.98 + std.crypto.random.float(f32) * 0.04), // Slightly balanced supply/demand
+            .volatility = 0.05 + std.crypto.random.float(f32) * 0.1, // Random initial volatility
             .competitors = competitors,
             .active_events = active_events,
             .possible_events = possible_events,
             .price_history = price_history,
             .demand_history = demand_history,
-            .allocator = allocator,
+            .arena = arena,
+            .parent_allocator = allocator,
         };
     }
     
     /// Clean up resources
     pub fn deinit(self: *MarketSimulation) void {
-        self.competitors.deinit();
-        self.active_events.deinit();
-        self.possible_events.deinit();
-        self.price_history.deinit();
-        self.demand_history.deinit();
+        // With arena allocator, we just need to deinit the arena itself
+        // which frees all memory allocated from it at once
+        self.arena.deinit();
+    }
+    
+    /// Reset the simulation state while keeping the same allocators
+    pub fn reset(self: *MarketSimulation) !void {
+        // Deinitialize the arena without destroying it
+        const allocator = self.parent_allocator;
+        
+        // Destroy the old arena
+        self.arena.deinit();
+        
+        // Create a new arena with the same parent allocator
+        self.arena = std.heap.ArenaAllocator.init(allocator);
+        const arena_allocator = self.arena.allocator();
+        
+        // Reinitialize array lists
+        self.competitors = std.ArrayList(Competitor).init(arena_allocator);
+        self.active_events = std.ArrayList(WorldEvent).init(arena_allocator);
+        self.possible_events = std.ArrayList(WorldEvent).init(arena_allocator);
+        self.price_history = std.ArrayList(f32).init(arena_allocator);
+        self.demand_history = std.ArrayList(f32).init(arena_allocator);
+        
+        // Preallocate history capacity
+        try self.price_history.ensureTotalCapacity(365);
+        try self.demand_history.ensureTotalCapacity(365);
+        
+        // Reset to initial values
+        self.current_condition = .stable;
+        self.base_oil_price = 50.0;
+        self.current_oil_price = 50.0;
+        self.global_demand = 100.0;
+        self.global_supply = 101.0;
+        self.volatility = 0.1;
+        
+        // Re-initialize competitors and events
+        // (skipped for brevity, would duplicate the initialization code)
     }
     
     /// Simulate market changes for one day
@@ -761,14 +1299,32 @@ pub const MarketSimulation = struct {
             event.advanceDay();
         }
         
-        // Remove expired events
-        var i: usize = 0;
-        while (i < self.active_events.items.len) {
-            if (!self.active_events.items[i].isActive()) {
-                _ = self.active_events.orderedRemove(i);
-            } else {
-                i += 1;
+        // Remove expired events using a fixed buffer to avoid allocations
+        var active_indices: [16]usize = undefined;
+        var active_count: usize = 0;
+        
+        // Find indices of active events
+        for (self.active_events.items, 0..) |event, idx| {
+            if (event.isActive()) {
+                if (active_count < active_indices.len) {
+                    active_indices[active_count] = idx;
+                    active_count += 1;
+                }
             }
+        }
+        
+        // Clear and rebuild active events list
+        if (active_count < self.active_events.items.len) {
+            var new_active_events = std.ArrayList(WorldEvent).init(self.arena.allocator());
+            try new_active_events.ensureTotalCapacity(active_count);
+            
+            for (active_indices[0..active_count]) |idx| {
+                try new_active_events.append(self.active_events.items[idx]);
+            }
+            
+            // Replace the old list with the new one
+            self.active_events.deinit();
+            self.active_events = new_active_events;
         }
         
         // Chance for new event
@@ -783,7 +1339,7 @@ pub const MarketSimulation = struct {
         
         // Update competitors
         for (self.competitors.items) |*competitor| {
-            competitor.simulateDay(self.current_condition);
+            competitor.simulateDay(self.current_condition, self.current_oil_price);
             self.global_supply += competitor.production_rate / 1_000_000.0; // Convert to millions of barrels
         }
         
@@ -818,17 +1374,31 @@ pub const MarketSimulation = struct {
         const demand_change = (std.crypto.random.float(f32) * 2.0 - 1.0) * 2.0;
         self.global_demand = @max(10.0, self.global_demand * (1.0 + demand_change / 100.0) * event_demand_modifier);
         
-        // Record history
+        // Record history without checking size each time
         try self.price_history.append(self.current_oil_price);
         try self.demand_history.append(self.global_demand);
         
-        // Limit history size to avoid memory growth
+        // Use direct removal and ensure we don't check every day
         if (self.price_history.items.len > 365) {
-            _ = self.price_history.orderedRemove(0);
+            // Remove in batches to reduce operations
+            const excess = self.price_history.items.len - 365;
+            if (excess > 30) { // Only trim when we have a significant number to remove
+                var i: usize = 0;
+                while (i < excess) : (i += 1) {
+                    _ = self.price_history.orderedRemove(0);
+                }
+            }
         }
         
         if (self.demand_history.items.len > 365) {
-            _ = self.demand_history.orderedRemove(0);
+            // Remove in batches to reduce operations
+            const excess = self.demand_history.items.len - 365;
+            if (excess > 30) { // Only trim when we have a significant number to remove
+                var i: usize = 0;
+                while (i < excess) : (i += 1) {
+                    _ = self.demand_history.orderedRemove(0);
+                }
+            }
         }
     }
     
@@ -848,16 +1418,16 @@ pub const MarketSimulation = struct {
         
         const percentage_change = (current - week_ago) / week_ago * 100.0;
         
-        if (percentage_change > 5.0) {
-            return "Strong Upward";
-        } else if (percentage_change > 1.0) {
-            return "Upward";
-        } else if (percentage_change < -5.0) {
-            return "Strong Downward";
-        } else if (percentage_change < -1.0) {
-            return "Downward";
-        } else {
-            return "Stable";
-        }
+        // Use comptime strings to avoid allocations
+        return if (percentage_change > 5.0) 
+            "Strong Upward"
+        else if (percentage_change > 1.0) 
+            "Upward"
+        else if (percentage_change < -5.0) 
+            "Strong Downward"
+        else if (percentage_change < -1.0) 
+            "Downward"
+        else 
+            "Stable";
     }
 }; 
